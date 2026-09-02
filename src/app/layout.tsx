@@ -1,9 +1,19 @@
-// src/app/page.tsx
-export default function Home() {
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "MandateOS",
+  description: "Policy layer for agent-mediated commerce",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold tracking-tight">MandateOS</h1>
-      <p className="mt-4 text-zinc-400">Policy layer for agent-mediated commerce</p>
-    </main>
+    <html lang="en">
+      <body>{children}</body>
+    </html>
   );
 }
