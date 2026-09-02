@@ -1,11 +1,6 @@
-// src/server/seed.ts
-
-import * as dotenv from "dotenv";
+import "dotenv/config";
 import { db } from "./db";
 import { mandates, merchants, users } from "./schema";
-
-// Load environment variables so the script can connect to Neon
-dotenv.config();
 
 async function main() {
   console.log("🌱 Seeding database...");
