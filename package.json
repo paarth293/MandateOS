@@ -16,13 +16,16 @@
     "seed": "tsx src/server/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.62",
     "@neondatabase/serverless": "^1.1.0",
+    "ai": "^7.0.90",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.4",
     "razorpay": "^2.9.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",
