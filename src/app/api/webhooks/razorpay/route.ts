@@ -3,20 +3,18 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
+import { inngest } from "@/server/inngest/client"; // <-- 1. Import our Durable Client
 import { transactions } from "@/server/schema";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // In a production app, we would cryptographically verify the Razorpay signature here.
-    // For our hackathon demo/Chaos Console, we allow raw events to pass through.
-
-    const eventType = body.event; // e.g., 'payment.captured' or 'payment.failed'
+    const eventType = body.event;
     const payload = body.payload.payment.entity;
     const orderId = payload.order_id;
 
-    // 1. Find the transaction in our database
+    // Find the original transaction
     const tx = await db.query.transactions.findFirst({
       where: eq(transactions.razorpayOrderId, orderId),
     });
@@ -25,20 +23,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    // 2. Handle the event
     if (eventType === "payment.failed") {
-      // Update transaction status in Postgres
+      const failureReason = payload.error_code || "BANK_TIMEOUT";
+
+      // Update the database to reflect the initial failure
       await db
         .update(transactions)
-        .set({
-          status: "FAILED",
-          failureReason: payload.error_code || "BANK_TIMEOUT",
-        })
+        .set({ status: "FAILED", failureReason })
         .where(eq(transactions.id, tx.id));
 
       console.log(`❌ Webhook: Payment failed for Order ${orderId}`);
 
-      // (Later in Phase 6, we will trigger Inngest here to run the recovery AI)
+      // 2. THE MAGIC: Wake up the AI and Recovery Engine!
+      // We send an array of events to trigger multiple background jobs simultaneously.
+      await inngest.send([
+        {
+          name: "payment/failed", // Triggers recoverFailedPayment in functions.ts
+          data: {
+            transactionId: tx.id,
+            mandateId: tx.mandateId,
+          },
+        },
+        {
+          name: "audit/generate", // Triggers generateAuditLog in functions.ts
+          data: {
+            transactionId: tx.id,
+            mandateId: tx.mandateId,
+            failureReason: failureReason,
+            retryCount: tx.retryCount,
+          },
+        },
+      ]);
     } else if (eventType === "payment.captured") {
       await db.update(transactions).set({ status: "SUCCESS" }).where(eq(transactions.id, tx.id));
 
