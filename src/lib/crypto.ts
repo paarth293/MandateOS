@@ -1,4 +1,4 @@
-import crypto from "crypto"; // Node's built-in crypto module for SHA-256
+import crypto from "node:crypto"; // Fix 1: Added node: protocol
 import nacl from "tweetnacl";
 
 export function generateKeypair(): { publicKey: string; secretKey: string } {
@@ -22,15 +22,18 @@ export function verifySignature(data: string, signatureHex: string, publicKeyHex
     const signatureBytes = new Uint8Array(Buffer.from(signatureHex, "hex"));
     const publicKeyBytes = new Uint8Array(Buffer.from(publicKeyHex, "hex"));
     return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-  } catch (error) {
+  } catch {
+    // Fix 3: Removed the unused 'error' variable entirely
     return false;
   }
 }
 
-export function generateAuditHash(action: string, details: any, previousHash: string): string {
-  // 1. Serialize all the row data into a single string
+// Fix 2: Replaced 'any' with 'Record<string, unknown>' for strict JSON typing
+export function generateAuditHash(
+  action: string,
+  details: Record<string, unknown>,
+  previousHash: string,
+): string {
   const payload = JSON.stringify({ action, details, previousHash });
-
-  // 2. Generate a SHA-256 hash (64 hex characters) of that exact string
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
