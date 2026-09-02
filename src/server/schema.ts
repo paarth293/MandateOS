@@ -60,3 +60,43 @@ export const mandates = pgTable("mandates", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// --- ENUMS ---
+// We track 4 states: PENDING, SUCCESS, FAILED, and the magical "RECOVERED"
+// RECOVERED means it failed originally, but our Agent Policy Engine saved it!
+export const transactionStatusEnum = pgEnum("transaction_status", [
+  "PENDING",
+  "SUCCESS",
+  "FAILED",
+  "RECOVERED",
+]);
+
+// --- TRANSACTIONS (The Event Stream) ---
+export const transactions = pgTable("transactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // Link to the policy and the seller
+  mandateId: uuid("mandate_id")
+    .references(() => mandates.id)
+    .notNull(),
+  merchantId: uuid("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
+
+  amount: integer("amount").notNull(), // Remember: Stored in Paise!
+
+  status: transactionStatusEnum("status").default("PENDING").notNull(),
+
+  // --- CHAOS CONSOLE FIELDS ---
+  // If the transaction fails, we store the exact reason here (e.g., "BANK_TIMEOUT")
+  failureReason: varchar("failure_reason", { length: 255 }),
+
+  // We compare this against the mandate's maxSilentRetries
+  retryCount: integer("retry_count").default(0).notNull(),
+
+  // The external ID from Razorpay (mocked or real)
+  razorpayOrderId: varchar("razorpay_order_id", { length: 255 }),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
