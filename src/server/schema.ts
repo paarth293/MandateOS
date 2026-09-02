@@ -100,3 +100,30 @@ export const transactions = pgTable("transactions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// --- AUDIT LOGS (The Cryptographic Trust Trail) ---
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // What is this log about?
+  mandateId: uuid("mandate_id")
+    .references(() => mandates.id)
+    .notNull(),
+
+  // Nullable, because some logs (like "Mandate Created") happen before any transaction exists
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+
+  // e.g., 'PAYMENT_FAILED', 'RECOVERY_INITIATED', 'LLM_ANALYSIS_COMPLETE'
+  action: varchar("action", { length: 255 }).notNull(),
+
+  // This will store the Gemini LLM's plain English explanation!
+  details: jsonb("details").notNull(),
+
+  // --- THE HASH CHAIN (Magic happens here) ---
+  // SHA-256 hashes are always exactly 64 characters long
+  previousHash: varchar("previous_hash", { length: 64 }).notNull(),
+  currentHash: varchar("current_hash", { length: 64 }).notNull(),
+
+  // Audit logs are strictly append-only/immutable, so there is no updatedAt
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
