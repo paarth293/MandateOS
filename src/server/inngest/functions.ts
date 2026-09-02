@@ -1,14 +1,16 @@
 import { eq } from "drizzle-orm";
+import { generateAuditHash } from "@/lib/crypto";
 import { MandateOSPaymentGateway } from "@/lib/razorpay";
+import { analyzeTransactionFailure } from "../ai";
 import { db } from "../db";
 import { evaluateMandatePolicy } from "../policy";
-import { mandates, transactions } from "../schema";
+import { auditLogs, mandates, transactions } from "../schema";
 import { inngest } from "./client";
 
 export const recoverFailedPayment = inngest.createFunction(
   {
     id: "recover-failed-payment",
-    triggers: [{ event: "payment/failed" }], // Inngest v4 Syntax
+    triggers: [{ event: "payment/failed" }],
   },
   async ({ event, step }) => {
     // We strictly type the incoming event data here to ensure TypeScript safety
@@ -51,7 +53,7 @@ export const recoverFailedPayment = inngest.createFunction(
           .where(eq(transactions.id, tx.id));
 
         return { success: true, reason: "Payment recovered after silent retry." };
-      } catch (error) {
+      } catch (_error) {
         await db
           .update(transactions)
           .set({ retryCount: tx.retryCount + 1 })
@@ -62,5 +64,55 @@ export const recoverFailedPayment = inngest.createFunction(
     });
 
     return recoveryResult;
+  },
+);
+
+export const generateAuditLog = inngest.createFunction(
+  {
+    id: "generate-audit-log",
+    triggers: [{ event: "audit/generate" }],
+  },
+  async ({ event, step }) => {
+    const payload = event.data as {
+      transactionId: string;
+      mandateId: string;
+      failureReason: string;
+      retryCount: number;
+    };
+
+    // 1. Call Gemini (Durable Step)
+    const aiAnalysis = await step.run("analyze-with-gemini", async () => {
+      return await analyzeTransactionFailure(
+        payload.failureReason,
+        payload.retryCount,
+        2, // Assuming max 2 silent retries for this demo
+      );
+    });
+
+    // 2. Cryptographic Hash Chain
+    await step.run("write-secure-log", async () => {
+      // Fetch the most recent log for the hash chain
+      const lastLog = await db.query.auditLogs.findFirst({
+        orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
+      });
+
+      const previousHash = lastLog
+        ? lastLog.currentHash
+        : "0000000000000000000000000000000000000000000000000000000000000000";
+      const action = payload.retryCount > 0 ? "SILENT_RETRY" : "PAYMENT_FAILED";
+
+      const currentHash = generateAuditHash(action, aiAnalysis, previousHash);
+
+      await db.insert(auditLogs).values({
+        mandateId: payload.mandateId,
+        transactionId: payload.transactionId,
+        action,
+        details: aiAnalysis, // The strict JSON from Gemini
+        previousHash,
+        currentHash,
+      });
+    });
+
+    return { success: true };
   },
 );

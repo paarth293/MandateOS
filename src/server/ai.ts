@@ -44,7 +44,7 @@ export async function analyzeTransactionFailure(
     });
 
     return object;
-  } catch (error) {
+  } catch (_error) {
     // --- DEMO SAFETY / FALLBACK ---
     // If the internet goes out or the LLM is slow during the presentation,
     // we instantly return a deterministic fallback response.
