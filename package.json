@@ -18,9 +18,12 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.62",
     "@neondatabase/serverless": "^1.1.0",
+    "@tanstack/react-query": "^5.102.8",
     "ai": "^7.0.90",
     "drizzle-orm": "^0.45.2",
+    "framer-motion": "^13.2.0",
     "inngest": "^4.18.1",
+    "lucide-react": "^1.40.0",
     "next": "16.3.4",
     "razorpay": "^2.9.8",
     "react": "19.2.8",
