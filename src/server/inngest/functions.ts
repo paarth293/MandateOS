@@ -91,44 +91,88 @@ export const recoverFailedPayment = inngest.createFunction(
         return { success: false, reason: policyCheck.reason };
       }
 
-      // Try gateway again
+      // 2. ATOMIC RETRY BUDGET CLAIM:
+      // Concurrency-safe atomic claim ensures parallel workers never exceed maxSilentRetries
+      const maxRetries = mandate.maxSilentRetries ?? 3;
+      const [claimedTx] = await db
+        .update(transactions)
+        .set({
+          retryCount: sql`${transactions.retryCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(transactions.id, transactionId), lt(transactions.retryCount, maxRetries)))
+        .returning();
+
+      if (!claimedTx) {
+        // Retry budget exhausted -> Quarantine transaction to FAILED for human review
+        await db
+          .update(transactions)
+          .set({
+            status: "FAILED",
+            failureReason: "RETRY_BUDGET_EXHAUSTED",
+            updatedAt: new Date(),
+          })
+          .where(eq(transactions.id, transactionId));
+
+        await inngest.send({
+          name: "audit/generate",
+          data: {
+            transactionId: tx.id,
+            mandateId: mandate.id,
+            failureReason: "RETRY_BUDGET_EXHAUSTED",
+            retryCount: tx.retryCount,
+            action: "RETRY_EXHAUSTED_QUARANTINED",
+          },
+        });
+
+        return {
+          success: false,
+          reason: `Retry budget exhausted (${tx.retryCount}/${maxRetries}). Quarantined for review.`,
+        };
+      }
+
+      // Try gateway again using the atomically claimed transaction
       try {
         const isMock = process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID;
         if (isMock) {
-          if (tx.nextRetryOutcome === "FAIL") {
+          if (claimedTx.nextRetryOutcome === "FAIL") {
             throw new Error("MOCK_GATEWAY: Retried payment failed deterministically");
           }
 
           // Mock mode: Settle to RECOVERED immediately
           await db
             .update(transactions)
-            .set({ status: "RECOVERED", retryCount: tx.retryCount + 1 })
-            .where(eq(transactions.id, tx.id));
+            .set({ status: "RECOVERED" })
+            .where(eq(transactions.id, claimedTx.id));
 
-          return { success: true, reason: "Payment recovered after silent retry." };
+          return {
+            success: true,
+            reason: "Payment recovered after silent retry.",
+          };
         }
 
         // Live mode: Dispatch order to Razorpay and transition to ORDER_CREATED
-        const newOrder = await MandateOSPaymentGateway.createOrder(tx.amount, mandate.id);
+        const newOrder = await MandateOSPaymentGateway.createOrder(claimedTx.amount, mandate.id);
 
         await db
           .update(transactions)
           .set({
             status: "ORDER_CREATED",
             razorpayOrderId: newOrder.id,
-            retryCount: tx.retryCount + 1,
           })
-          .where(eq(transactions.id, tx.id));
+          .where(eq(transactions.id, claimedTx.id));
 
         return {
           success: true,
           reason: "Retry order created at gateway; awaiting webhook settlement.",
         };
       } catch (_error) {
-        await db
-          .update(transactions)
-          .set({ retryCount: tx.retryCount + 1 })
-          .where(eq(transactions.id, tx.id));
+        if (claimedTx.retryCount >= maxRetries) {
+          await db
+            .update(transactions)
+            .set({ status: "FAILED", failureReason: "MAX_RETRIES_EXCEEDED" })
+            .where(eq(transactions.id, claimedTx.id));
+        }
 
         return { success: false, reason: "Retry failed at gateway." };
       }
