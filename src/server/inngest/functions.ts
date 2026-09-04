@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { generateAuditHash } from "@/lib/crypto";
 import { MandateOSPaymentGateway } from "@/lib/razorpay";
 import { analyzeTransactionFailure } from "../ai";
@@ -177,5 +177,65 @@ export const generateAuditLog = inngest.createFunction(
     });
 
     return { success: true };
+  },
+);
+
+export const reconcileStaleOrders = inngest.createFunction(
+  {
+    id: "reconcile-stale-orders",
+    triggers: [{ cron: "*/15 * * * *" }],
+  },
+  async ({ step }) => {
+    // 1. Find all transactions stuck in ORDER_CREATED for > 15 minutes
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000);
+
+    const staleOrders = await step.run("find-stale-orders", async () => {
+      return await db.query.transactions.findMany({
+        where: and(
+          eq(transactions.status, "ORDER_CREATED"),
+          lt(transactions.createdAt, staleCutoff),
+        ),
+        limit: 25,
+      });
+    });
+
+    if (staleOrders.length === 0) {
+      return { reconciled: 0 };
+    }
+
+    // 2. Reconcile each stale order
+    let reconciledCount = 0;
+    for (const tx of staleOrders) {
+      await step.run(`reconcile-tx-${tx.id}`, async () => {
+        const isMock = process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID;
+
+        // In mock mode or if nextRetryOutcome is FAIL, transition to FAILED
+        const nextStatus = isMock && tx.nextRetryOutcome === "FAIL" ? "FAILED" : "SUCCESS";
+        const failureReason = nextStatus === "FAILED" ? "STALE_ORDER_EXPIRED" : null;
+
+        await db
+          .update(transactions)
+          .set({
+            status: nextStatus,
+            failureReason,
+          })
+          .where(eq(transactions.id, tx.id));
+
+        // Emit audit log entry
+        await inngest.send({
+          name: "audit/generate",
+          data: {
+            transactionId: tx.id,
+            mandateId: tx.mandateId,
+            failureReason: failureReason || "NONE",
+            retryCount: tx.retryCount,
+            action: nextStatus === "SUCCESS" ? "RECONCILIATION_CAPTURED" : "RECONCILIATION_EXPIRED",
+          },
+        });
+      });
+      reconciledCount++;
+    }
+
+    return { reconciled: reconciledCount };
   },
 );
