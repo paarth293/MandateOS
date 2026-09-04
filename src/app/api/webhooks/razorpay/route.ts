@@ -1,20 +1,45 @@
-// src/app/api/webhooks/razorpay/route.ts
-
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { inngest } from "@/server/inngest/client"; // <-- 1. Import our Durable Client
+import { inngest } from "@/server/inngest/client";
 import { transactions } from "@/server/schema";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-razorpay-signature");
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
+    // Verify HMAC-SHA256 signature in live mode (or whenever secret is configured)
+    if (process.env.GATEWAY_MODE !== "mock" && webhookSecret) {
+      if (!signature) {
+        return NextResponse.json({ error: "Missing signature header" }, { status: 400 });
+      }
+
+      const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+
+      const sigBuffer = Buffer.from(signature, "utf8");
+      const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+
+      if (
+        sigBuffer.length !== expectedBuffer.length ||
+        !timingSafeEqual(sigBuffer, expectedBuffer)
+      ) {
+        return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
+      }
+    }
+
+    const body = JSON.parse(rawBody);
     const eventType = body.event;
-    const payload = body.payload.payment.entity;
-    const orderId = payload.order_id;
+    const payload = body.payload?.payment?.entity;
+    const orderId = payload?.order_id;
 
-    // Find the original transaction
+    if (!orderId) {
+      return NextResponse.json({ error: "Missing order_id in webhook payload" }, { status: 400 });
+    }
+
+    // Find the correlated transaction
     const tx = await db.query.transactions.findFirst({
       where: eq(transactions.razorpayOrderId, orderId),
     });
@@ -24,28 +49,25 @@ export async function POST(req: Request) {
     }
 
     if (eventType === "payment.failed") {
-      const failureReason = payload.error_code || "BANK_TIMEOUT";
+      const failureReason = payload.error_code || payload.error_description || "BANK_TIMEOUT";
 
-      // Update the database to reflect the initial failure
       await db
         .update(transactions)
         .set({ status: "FAILED", failureReason })
         .where(eq(transactions.id, tx.id));
 
-      console.log(`❌ Webhook: Payment failed for Order ${orderId}`);
+      console.log(`❌ Webhook: Payment failed for Order ${orderId} (Reason: ${failureReason})`);
 
-      // 2. THE MAGIC: Wake up the AI and Recovery Engine!
-      // We send an array of events to trigger multiple background jobs simultaneously.
       await inngest.send([
         {
-          name: "payment/failed", // Triggers recoverFailedPayment in functions.ts
+          name: "payment/failed",
           data: {
             transactionId: tx.id,
             mandateId: tx.mandateId,
           },
         },
         {
-          name: "audit/generate", // Triggers generateAuditLog in functions.ts
+          name: "audit/generate",
           data: {
             transactionId: tx.id,
             mandateId: tx.mandateId,
@@ -55,9 +77,30 @@ export async function POST(req: Request) {
         },
       ]);
     } else if (eventType === "payment.captured") {
-      await db.update(transactions).set({ status: "SUCCESS" }).where(eq(transactions.id, tx.id));
+      // Finite state machine transition:
+      // If transaction was previously FAILED (retried by Inngest and captured), transition to RECOVERED.
+      // If transaction was ORDER_CREATED or PENDING, transition to SUCCESS.
+      const resolvedStatus = tx.status === "FAILED" ? "RECOVERED" : "SUCCESS";
 
-      console.log(`✅ Webhook: Payment captured for Order ${orderId}`);
+      await db
+        .update(transactions)
+        .set({ status: resolvedStatus })
+        .where(eq(transactions.id, tx.id));
+
+      console.log(
+        `✅ Webhook: Payment captured for Order ${orderId} -> Transitioned to ${resolvedStatus}`,
+      );
+
+      await inngest.send({
+        name: "audit/generate",
+        data: {
+          transactionId: tx.id,
+          mandateId: tx.mandateId,
+          failureReason: "NONE",
+          retryCount: tx.retryCount,
+          action: resolvedStatus === "RECOVERED" ? "SILENT_RETRY_SUCCESS" : "PAYMENT_CAPTURED",
+        },
+      });
     }
 
     return NextResponse.json({ status: "ok" });
