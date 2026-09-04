@@ -55,3 +55,7 @@ next-env.d.ts
 *.sqlite3
 *.db
 .drizzle/
+
+# agent secrets
+agent.key
+*.key
