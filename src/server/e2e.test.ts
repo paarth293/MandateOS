@@ -73,4 +73,43 @@ describe("MandateOS End-to-End System Integration", () => {
     expect(canonicalStringify(objA)).toBe(canonicalStringify(objB));
     expect(canonicalStringify(objA)).toBe('{"a":2,"m":{"x":"world","y":"hello"},"z":1}');
   });
+
+  it("should enforce daily and lifetime spend caps", () => {
+    const cappedMandate = {
+      id: "capped-mandate",
+      userId: "user-1",
+      agentName: "AutoGPT Capped Agent",
+      maxAmountPerTransaction: 500000, // ₹5,000 max per swipe
+      dailyLimitPaise: 1000000, // ₹10,000 max per day
+      lifetimeLimitPaise: 2500000, // ₹25,000 max lifetime
+      maxSilentRetries: 3,
+      allowedCategories: ["Cloud Servers"],
+      status: "ACTIVE",
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+    };
+
+    // 1. Within daily limit
+    const pass = evaluateMandatePolicy(300000, "Cloud Servers", cappedMandate as any, 0, {
+      spentTodayPaise: 500000,
+      spentLifetimePaise: 1000000,
+    });
+    expect(pass.allowed).toBe(true);
+
+    // 2. Exceeds daily limit (7,000 + 4,000 = 11,000 > 10,000)
+    const failDaily = evaluateMandatePolicy(400000, "Cloud Servers", cappedMandate as any, 0, {
+      spentTodayPaise: 700000,
+      spentLifetimePaise: 1000000,
+    });
+    expect(failDaily.allowed).toBe(false);
+    expect(failDaily.reason).toContain("DAILY_LIMIT_EXCEEDED");
+
+    // 3. Exceeds lifetime limit (22,000 + 4,000 = 26,000 > 25,000)
+    const failLifetime = evaluateMandatePolicy(400000, "Cloud Servers", cappedMandate as any, 0, {
+      spentTodayPaise: 0,
+      spentLifetimePaise: 2200000,
+    });
+    expect(failLifetime.allowed).toBe(false);
+    expect(failLifetime.reason).toContain("LIFETIME_LIMIT_EXCEEDED");
+  });
 });
