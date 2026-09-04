@@ -1,3 +1,4 @@
+// src/server/e2e.test.ts
 import { describe, expect, it } from "vitest";
 import { generateAuditHash } from "@/lib/crypto";
 import { evaluateMandatePolicy } from "./policy";
@@ -13,6 +14,7 @@ describe("MandateOS End-to-End System Integration", () => {
       allowedCategories: ["Cloud Servers", "Software"],
       status: "ACTIVE",
       createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
     };
 
     const valid = evaluateMandatePolicy(250000, "Cloud Servers", mockMandate as any, 0);
@@ -20,11 +22,11 @@ describe("MandateOS End-to-End System Integration", () => {
 
     const tooHigh = evaluateMandatePolicy(99999999, "Cloud Servers", mockMandate as any, 0);
     expect(tooHigh.allowed).toBe(false);
-    expect(tooHigh.reason).toContain("Exceeds mandate limit");
+    expect(tooHigh.reason).toContain("LIMIT_EXCEEDED");
 
     const wrongCategory = evaluateMandatePolicy(100000, "Ferrari", mockMandate as any, 0);
     expect(wrongCategory.allowed).toBe(false);
-    expect(wrongCategory.reason).toContain("not authorized");
+    expect(wrongCategory.reason).toContain("CATEGORY_BLOCKED");
   });
 
   it("should perfectly link cryptographic hash chains to prevent AI log tampering", () => {
