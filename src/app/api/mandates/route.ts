@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { generateAuditHash, generateKeypair, signData } from "@/lib/crypto";
 import { getSessionUser } from "@/server/auth";
 import { db } from "@/server/db";
-import { auditLogs, mandates, users } from "@/server/schema";
+import { auditLogs, mandates } from "@/server/schema";
 import { createMandateSchema, updateMandateSchema } from "@/server/validation";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const list = await db.query.mandates.findMany({
       orderBy: [desc(mandates.createdAt)],
     });
@@ -31,6 +36,17 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role === "VIEWER") {
+      return NextResponse.json(
+        { error: "Forbidden: Viewers cannot issue mandates" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const parseResult = createMandateSchema.safeParse(body);
 
@@ -42,21 +58,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parseResult.data;
-
-    // Resolve authorized user
-    let user = await getSessionUser();
-    if (!user) {
-      user =
-        (await db.query.users.findFirst({
-          where: eq(users.role, "ADMIN"),
-        })) ??
-        (await db.query.users.findFirst()) ??
-        null;
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     // 1. Generate Ed25519 Keypair for cryptographic spend authorization
     const keypair = generateKeypair();
@@ -125,6 +126,17 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role === "VIEWER") {
+      return NextResponse.json(
+        { error: "Forbidden: Viewers cannot modify mandates" },
+        { status: 403 },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const body = await request.json().catch(() => ({}));
     const id = searchParams.get("id") || body.id;
