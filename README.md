@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MandateOS 🛡️
 
-## Getting Started
+**Cryptographically Secure Policy Engine for Autonomous AI Agents**
 
-First, run the development server:
+MandateOS is the infrastructure layer that allows humans to safely give AI Agents money. It acts as a deterministic, mathematically verifiable firewall between an AI (like AutoGPT or LangChain) and a payment gateway (like Razorpay). 
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 The Architecture
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Deterministic Policy Engine**: Humans set strict, immutable rules (e.g., "Only buy Cloud Servers, maximum ₹5,000, max 3 silent retries"). AI Agents cannot hallucinate their way past this firewall.
+2. **The Chaos Engine (Resiliency)**: Built on **Inngest**, MandateOS handles catastrophic gateway failures (like a `504 BANK_TIMEOUT`) by safely putting the transaction to sleep and executing a "Silent Retry" 30 seconds later, completely abstracting the failure away from the AI.
+3. **Cryptographic Hash Chain**: Every action the system takes is verified by **Google Gemini** (generating a plain-English explanation) and then mathematically locked into a SHA-256 Hash Chain. If a single byte of the audit log is tampered with, the entire chain breaks.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Tech Stack
+- **Framework**: Next.js 15 (App Router) + React
+- **Database**: Neon Postgres (Serverless) + Drizzle ORM
+- **Durability/Jobs**: Inngest (Serverless Queues)
+- **AI**: Google Gemini (Vercel AI SDK)
+- **Cryptography**: Ed25519 (TweetNaCl) + SHA-256
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 💻 Local Setup
+1. Clone the repository
+2. `npm install`
+3. Add your `.env` variables (Neon, Razorpay, Gemini, Inngest)
+4. `npm run db:push` to sync the schema
+5. `npm run db:seed` to populate the dashboard
+6. `npm run dev` to start the application

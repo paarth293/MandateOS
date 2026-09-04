@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     await db.insert(transactions).values({
       id: txId,
       mandateId: mandate.id,
+      merchantId: mandate.merchantId,
       amount: amountPaise,
       status: "PENDING",
     });

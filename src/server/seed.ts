@@ -1,53 +1,90 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import { db } from "./db";
-import { mandates, merchants, users } from "./schema";
+import { mandates, merchants, transactions, users } from "./schema";
 
-async function main() {
-  console.log("🌱 Seeding database...");
+async function seed() {
+  console.log("🌱 Initiating Enterprise Seed Sequence...");
 
-  // 1. Create the Demo User (Priya from your pitch)
-  const [priya] = await db
+  const userId = "00000000-0000-0000-0000-000000000001";
+  const merchantId = "00000000-0000-0000-0000-000000000002";
+  const mandateId = "00000000-0000-0000-0000-000000000003";
+
+  await db
     .insert(users)
     .values({
+      id: userId,
       name: "Priya Sharma",
-      email: "priya.sharma@example.com",
+      email: "priya@mandateos.dev",
     })
-    .returning();
-  console.log(`👤 Created user: ${priya.name} (${priya.id})`);
+    .onConflictDoNothing();
 
-  // 2. Create the Demo Merchant (TechSupply from your pitch)
-  const [techSupply] = await db
+  await db
     .insert(merchants)
     .values({
-      name: "TechSupply",
+      id: merchantId,
+      name: "TechSupply India",
       businessCategory: "Office Supplies",
       upiId: "techsupply@razorpay",
     })
-    .returning();
-  console.log(`🏪 Created merchant: ${techSupply.name} (${techSupply.id})`);
+    .onConflictDoNothing();
 
-  // 3. Create the Demo Mandate
-  const [mandate] = await db
+  await db
     .insert(mandates)
     .values({
-      userId: priya.id,
-      agentName: "Google-AP2",
-      publicKey: "pubkey_demo_12345", // We will replace this with real crypto keys later
-      signature: "sig_demo_abc987",
+      id: mandateId,
+      userId: userId,
+      merchantId: merchantId,
+      agentName: "AutoGPT Procurement Agent",
+      publicKey: "mock_pub_key",
+      signature: "mock_signature",
+      expiresAt: new Date(Date.now() + 10000000000),
+      maxAmountPerTransaction: 500000,
+      maxSilentRetries: 3,
+      allowedCategories: ["Office Supplies", "Cloud Servers"],
       status: "ACTIVE",
-      maxAmountPerTransaction: 500000, // Stored in Paise (₹5,000.00)
-      allowedCategories: ["Office Supplies", "Software"],
-      maxSilentRetries: 2,
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365), // 1 year from now
     })
-    .returning();
-  console.log(`📜 Created mandate for agent: ${mandate.agentName}`);
+    .onConflictDoNothing();
 
-  console.log("✅ Seeding complete!");
+  const statuses: ("SUCCESS" | "RECOVERED" | "FAILED" | "PENDING")[] = [
+    "SUCCESS",
+    "SUCCESS",
+    "SUCCESS",
+    "RECOVERED",
+    "FAILED",
+  ];
+
+  for (let i = 0; i < 15; i++) {
+    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+    const randomAmount = Math.floor(Math.random() * 400000) + 100000;
+
+    let failureReason = null;
+    let retryCount = 0;
+
+    if (randomStatus === "RECOVERED") {
+      failureReason = "BANK_TIMEOUT";
+      retryCount = 1;
+    } else if (randomStatus === "FAILED") {
+      failureReason = "INSUFFICIENT_FUNDS";
+    }
+
+    await db.insert(transactions).values({
+      id: randomUUID(),
+      mandateId: mandateId,
+      merchantId: merchantId,
+      amount: randomAmount,
+      status: randomStatus,
+      failureReason,
+      retryCount,
+      createdAt: new Date(Date.now() - Math.random() * 100000000 * 3),
+    });
+  }
+
+  console.log("✅ Seed Complete: Dashboard populated with historical data.");
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("❌ Seeding failed:", err);
+seed().catch((err) => {
+  console.error("Seed failed:", err);
   process.exit(1);
 });

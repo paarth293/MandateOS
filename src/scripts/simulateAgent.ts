@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 const API_URL = "http://localhost:3000/api/agent/purchase";
-const MANDATE_ID = "man_000000000000000000000000001";
+const MANDATE_ID = "00000000-0000-0000-0000-000000000003";
 
 async function simulatePurchase(item: string, amountPaise: number) {
   console.log(`\n🤖 AI Agent attempting to purchase: ${item} (₹${amountPaise / 100})`);
