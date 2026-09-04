@@ -1,13 +1,24 @@
 "use client";
 
-import { LayoutDashboard, Receipt, Settings, ShieldCheck } from "lucide-react";
+import {
+  Anchor,
+  LayoutDashboard,
+  Receipt,
+  Settings,
+  ShieldCheck,
+  Swords,
+  UserCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navigation = [
   { name: "Chaos Console", href: "/", icon: LayoutDashboard },
   { name: "Mandates", href: "/mandates", icon: ShieldCheck },
+  { name: "Review Queue", href: "/review", icon: UserCheck },
   { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Battle Arena", href: "/arena", icon: Swords },
+  { name: "Trust Explorer", href: "/trust", icon: Anchor },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
