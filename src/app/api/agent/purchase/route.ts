@@ -169,7 +169,7 @@ export async function POST(req: Request) {
       mandateId: mandate.id,
       merchantId: merchant.id,
       amount: amountPaise,
-      status: "PENDING",
+      status: "ORDER_CREATED",
       razorpayOrderId: order.id,
     });
 

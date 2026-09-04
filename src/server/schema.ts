@@ -86,6 +86,7 @@ export const mandates = pgTable("mandates", {
 // --- ENUMS ---
 export const transactionStatusEnum = pgEnum("transaction_status", [
   "PENDING",
+  "ORDER_CREATED",
   "SUCCESS",
   "FAILED",
   "RECOVERED",

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, CheckCircle2, RefreshCcw, XCircle } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Clock, RefreshCcw, XCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 export interface Transaction {
@@ -22,6 +22,8 @@ export default function TransactionList({ transactions }: TransactionListProps) 
     switch (status) {
       case "SUCCESS":
         return { color: "text-green-700 bg-green-50 ring-green-600/20", icon: CheckCircle2 };
+      case "ORDER_CREATED":
+        return { color: "text-amber-700 bg-amber-50 ring-amber-600/20", icon: Clock };
       case "FAILED":
         return { color: "text-red-700 bg-red-50 ring-red-600/10", icon: XCircle };
       case "RECOVERED":
