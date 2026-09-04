@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, RefreshCcw, XCircle } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 export interface Transaction {
   id: string;
@@ -47,10 +48,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
               const display = getStatusDisplay(tx.status);
               const Icon = display.icon;
 
-              const formattedAmount = (tx.amount / 100).toLocaleString("en-IN", {
-                style: "currency",
-                currency: "INR",
-              });
+              const formattedAmount = formatCurrency(tx.amount);
 
               const date = new Date(tx.createdAt).toLocaleDateString("en-IN", {
                 month: "short",

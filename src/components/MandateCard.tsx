@@ -1,5 +1,6 @@
 // src/components/MandateCard.tsx
 import { CreditCard, RefreshCw, Shield } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 // 1. THE PROPS DEFINITION
 // We strictly tell TypeScript exactly what data this card requires to function.
@@ -19,10 +20,7 @@ export default function MandateCard({ mandate }: MandateCardProps) {
   // Format the amount. Our database stores money in Paise (e.g., 500000).
   // We divide by 100 to get Rupees, and use JavaScript's built-in formatter
   // to add commas and the ₹ symbol automatically.
-  const formattedAmount = (mandate.maxAmountPerTransaction / 100).toLocaleString("en-IN", {
-    style: "currency",
-    currency: "INR",
-  });
+  const formattedAmount = formatCurrency(mandate.maxAmountPerTransaction);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">

@@ -2,9 +2,14 @@
 /**
  * Utility functions for MandateOS
  */
-export function formatCurrency(amount: number) {
+/**
+ * Standardized Fintech Formatter:
+ * Accepts amount in PAISE (integer) and formats to INR currency string.
+ */
+export function formatCurrency(paise: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-  }).format(amount);
+    maximumFractionDigits: 2,
+  }).format(paise / 100);
 }
