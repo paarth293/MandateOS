@@ -16,19 +16,21 @@ import {
 } from "./schema";
 
 async function seed() {
-  console.log("🌱 Initiating MandateOS v2 Enterprise Seed Sequence...\n");
+  console.log("🌱 Initiating MandateOS v3 Enterprise Seed Sequence...\n");
 
   const user1Id = "00000000-0000-0000-0000-000000000001";
   const user2Id = "00000000-0000-0000-0000-000000000011";
 
   const merchant1Id = "00000000-0000-0000-0000-000000000002";
   const merchant2Id = "00000000-0000-0000-0000-000000000022";
+  const merchant3Id = "00000000-0000-0000-0000-000000000033";
 
   const mandate1Id = "00000000-0000-0000-0000-000000000003";
   const mandate2Id = "00000000-0000-0000-0000-000000000004";
+  const mandate3Id = "00000000-0000-0000-0000-000000000005";
 
   // 1. Users with Scrypt Passwords & Roles
-  console.log("👤 Seeding authenticated users...");
+  console.log("👤 Seeding authenticated enterprise users...");
   await db
     .insert(users)
     .values([
@@ -55,8 +57,8 @@ async function seed() {
       },
     });
 
-  // 2. Merchants
-  console.log("🏢 Seeding authorized merchants...");
+  // 2. Authorized Merchants
+  console.log("🏢 Seeding authorized merchant catalog...");
   await db
     .insert(merchants)
     .values([
@@ -72,21 +74,27 @@ async function seed() {
         businessCategory: "Cloud Servers",
         upiId: "cloudcore@razorpay",
       },
+      {
+        id: merchant3Id,
+        name: "DataStream Analytics Hub",
+        businessCategory: "Data Services",
+        upiId: "datastream@razorpay",
+      },
     ])
     .onConflictDoNothing();
 
-  // 3. Real Ed25519 Keypair Generation
+  // 3. Ed25519 Cryptographic Keypairs for Autonomous Agents
   console.log("🔑 Generating cryptographic Ed25519 keypairs for AI Agents...");
   const agent1Keypair = generateKeypair();
   const agent2Keypair = generateKeypair();
+  const agent3Keypair = generateKeypair();
 
-  // Write agent1 secret key to gitignored agent.key file
   const keyFilePath = path.resolve(process.cwd(), "agent.key");
   fs.writeFileSync(keyFilePath, agent1Keypair.secretKey, { encoding: "utf8" });
   console.log(`📝 Wrote primary agent secret key to: ${keyFilePath}`);
 
-  // 4. Mandates with Daily and Lifetime Caps
-  console.log("📜 Seeding cryptographic mandates with spend caps...");
+  // 4. Mandates with Spending Caps & Category Whitelists
+  console.log("📜 Seeding cryptographic mandates with policy ceilings...");
   await db
     .insert(mandates)
     .values([
@@ -120,6 +128,21 @@ async function seed() {
         allowedCategories: ["Cloud Servers"],
         status: "ACTIVE",
       },
+      {
+        id: mandate3Id,
+        userId: user1Id,
+        agentName: "DataPipeline Sync Agent",
+        publicKey: agent3Keypair.publicKey,
+        signature: signData("DataPipeline Sync Agent", agent3Keypair.secretKey),
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 90), // 3 months
+        maxAmountPerTransaction: 200000, // ₹2,000
+        dailyLimitPaise: 800000, // ₹8,000
+        lifetimeLimitPaise: 2500000, // ₹25,000
+        maxSilentRetries: 3,
+        retryDelaySeconds: 15,
+        allowedCategories: ["Data Services", "Cloud Servers"],
+        status: "ACTIVE",
+      },
     ])
     .onConflictDoUpdate({
       target: mandates.id,
@@ -132,51 +155,166 @@ async function seed() {
       },
     });
 
-  // 5. Seed Historical Transactions with razorpayOrderId
-  console.log("💳 Seeding historical transaction stream...");
-  const statuses: ("SUCCESS" | "RECOVERED" | "FAILED")[] = [
-    "SUCCESS",
-    "SUCCESS",
-    "RECOVERED",
-    "FAILED",
+  // 5. Historical Transactions Across 7-Day Timeline
+  console.log("💳 Seeding varied 7-day transaction stream with chaos scenarios...");
+  const transactionTemplates = [
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant1Id,
+      status: "SUCCESS" as const,
+      amount: 125000,
+      failure: null,
+      retries: 0,
+      daysAgo: 6,
+    },
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant2Id,
+      status: "RECOVERED" as const,
+      amount: 240000,
+      failure: "BANK_TIMEOUT",
+      retries: 1,
+      daysAgo: 5,
+    },
+    {
+      mandateId: mandate2Id,
+      merchantId: merchant2Id,
+      status: "SUCCESS" as const,
+      amount: 450000,
+      failure: null,
+      retries: 0,
+      daysAgo: 4,
+    },
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant1Id,
+      status: "FAILED" as const,
+      amount: 490000,
+      failure: "CARD_EXPIRED",
+      retries: 3,
+      daysAgo: 3,
+    },
+    {
+      mandateId: mandate3Id,
+      merchantId: merchant3Id,
+      status: "SUCCESS" as const,
+      amount: 85000,
+      failure: null,
+      retries: 0,
+      daysAgo: 3,
+    },
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant2Id,
+      status: "SUCCESS" as const,
+      amount: 195000,
+      failure: null,
+      retries: 0,
+      daysAgo: 2,
+    },
+    {
+      mandateId: mandate2Id,
+      merchantId: merchant2Id,
+      status: "RECOVERED" as const,
+      amount: 320000,
+      failure: "BANK_TIMEOUT",
+      retries: 2,
+      daysAgo: 2,
+    },
+    {
+      mandateId: mandate3Id,
+      merchantId: merchant3Id,
+      status: "FAILED" as const,
+      amount: 199000,
+      failure: "INSUFFICIENT_FUNDS",
+      retries: 3,
+      daysAgo: 1,
+    },
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant1Id,
+      status: "SUCCESS" as const,
+      amount: 80000,
+      failure: null,
+      retries: 0,
+      daysAgo: 1,
+    },
+    {
+      mandateId: mandate2Id,
+      merchantId: merchant2Id,
+      status: "SUCCESS" as const,
+      amount: 500000,
+      failure: null,
+      retries: 0,
+      daysAgo: 0,
+    },
+    {
+      mandateId: mandate1Id,
+      merchantId: merchant2Id,
+      status: "ORDER_CREATED" as const,
+      amount: 150000,
+      failure: null,
+      retries: 0,
+      daysAgo: 0,
+    },
+    {
+      mandateId: mandate3Id,
+      merchantId: merchant3Id,
+      status: "SUCCESS" as const,
+      amount: 95000,
+      failure: null,
+      retries: 0,
+      daysAgo: 0,
+    },
   ];
 
-  for (let i = 0; i < 12; i++) {
-    const status = statuses[i % statuses.length];
-    const amount = Math.floor(Math.random() * 300000) + 150000;
-    const isRecovered = status === "RECOVERED";
-    const isFailed = status === "FAILED";
-
+  for (const t of transactionTemplates) {
+    const isRecovered = t.status === "RECOVERED";
     await db.insert(transactions).values({
       id: randomUUID(),
-      mandateId: mandate1Id,
-      merchantId: i % 2 === 0 ? merchant1Id : merchant2Id,
-      amount,
-      status,
-      failureReason: isRecovered ? "BANK_TIMEOUT" : isFailed ? "INSUFFICIENT_FUNDS" : null,
-      retryCount: isRecovered ? 1 : isFailed ? 3 : 0,
+      mandateId: t.mandateId,
+      merchantId: t.merchantId,
+      amount: t.amount,
+      status: t.status,
+      failureReason: t.failure,
+      retryCount: t.retries,
       razorpayOrderId: `order_seed_${randomUUID().slice(0, 12)}`,
       nextRetryOutcome: isRecovered ? "SUCCESS" : "FAIL",
-      createdAt: new Date(Date.now() - (12 - i) * 3600 * 1000),
+      createdAt: new Date(Date.now() - t.daysAgo * 86400 * 1000 - Math.random() * 3600 * 1000),
     });
   }
 
-  // 6. Seed Purchase Attempts (Replay Shield history)
-  console.log("🛡️ Seeding purchase attempt records...");
-  for (let i = 0; i < 8; i++) {
+  // 6. Purchase Attempts (Telemetry Stream & Replay Shield history)
+  console.log("🛡️ Seeding purchase attempt firewall history...");
+  const attemptScenarios = [
+    { cat: "Cloud Servers", amt: 250000, outcome: "ALLOWED", reason: "POLICY_PASSED" },
+    { cat: "Office Supplies", amt: 120000, outcome: "ALLOWED", reason: "POLICY_PASSED" },
+    { cat: "Luxury Watches", amt: 5000000, outcome: "BLOCKED", reason: "CATEGORY_BLOCKED" },
+    { cat: "Cloud Servers", amt: 99999999, outcome: "BLOCKED", reason: "LIMIT_EXCEEDED" },
+    {
+      cat: "Cloud Servers",
+      amt: 250000,
+      outcome: "BLOCKED",
+      reason: "REPLAY_DETECTED: Nonce already utilized",
+    },
+    { cat: "Data Services", amt: 85000, outcome: "ALLOWED", reason: "POLICY_PASSED" },
+  ];
+
+  for (let i = 0; i < attemptScenarios.length; i++) {
+    const sc = attemptScenarios[i];
     await db.insert(purchaseAttempts).values({
       id: randomUUID(),
       mandateId: mandate1Id,
-      merchantCategory: i === 7 ? "Luxury Vehicles" : "Cloud Servers",
-      amountPaise: i === 6 ? 99999999 : 250000,
+      merchantCategory: sc.cat,
+      amountPaise: sc.amt,
       nonce: `seed_nonce_${randomUUID()}`,
-      outcome: i < 6 ? "ALLOWED" : "BLOCKED",
-      reason: i === 6 ? "LIMIT_EXCEEDED" : i === 7 ? "CATEGORY_BLOCKED" : "POLICY_PASSED",
-      createdAt: new Date(Date.now() - (8 - i) * 1800 * 1000),
+      outcome: sc.outcome,
+      reason: sc.reason,
+      createdAt: new Date(Date.now() - (attemptScenarios.length - i) * 1800 * 1000),
     });
   }
 
-  // 7. Seed Clean SHA-256 Hash Chain Audit Logs
+  // 7. Clean SHA-256 Hash Chain Audit Trail
   console.log("⛓️ Seeding mathematically linked audit logs...");
   let currentHash = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -222,10 +360,12 @@ async function seed() {
     },
   ];
 
+  let genesisBlockHash = "";
   for (let i = 0; i < auditEvents.length; i++) {
     const event = auditEvents[i];
     const previousHash = currentHash;
     currentHash = generateAuditHash(event.action, event.details, previousHash);
+    if (i === 2) genesisBlockHash = currentHash;
 
     await db.insert(auditLogs).values({
       id: randomUUID(),
@@ -238,31 +378,48 @@ async function seed() {
     });
   }
 
-  // 8. Seed Initial Cryptographic Anchor
-  console.log("⚓ Seeding out-of-band anchor verification checkpoint...");
-  await db.insert(anchors).values({
-    id: randomUUID(),
-    mandateId: mandate1Id,
-    anchorHash: generateAuditHash("ANCHOR_CHECKPOINT", { blocks: auditEvents.length }, currentHash),
-    previousAnchorHash: "0000000000000000000000000000000000000000000000000000000000000000",
-    lastBlockHash: currentHash,
-    blockCount: auditEvents.length,
-    anchoredAt: new Date(),
-  });
+  // 8. Chained Cryptographic Anchors (Genesis + Head Checkpoint)
+  console.log("⚓ Seeding chained Merkle state anchors...");
+  const genesisAnchorHash = generateAuditHash(
+    "ANCHOR_GENESIS",
+    { blocks: 3 },
+    genesisBlockHash || currentHash,
+  );
+
+  await db.insert(anchors).values([
+    {
+      id: randomUUID(),
+      mandateId: mandate1Id,
+      anchorHash: genesisAnchorHash,
+      previousAnchorHash: "0000000000000000000000000000000000000000000000000000000000000000",
+      lastBlockHash: genesisBlockHash || currentHash,
+      blockCount: 3,
+      anchoredAt: new Date(Date.now() - 3600 * 1000),
+    },
+    {
+      id: randomUUID(),
+      mandateId: mandate1Id,
+      anchorHash: generateAuditHash("ANCHOR_HEAD", { blocks: auditEvents.length }, currentHash),
+      previousAnchorHash: genesisAnchorHash,
+      lastBlockHash: currentHash,
+      blockCount: auditEvents.length,
+      anchoredAt: new Date(),
+    },
+  ]);
 
   console.log("\n========================================================");
-  console.log("🎉 SEED COMPLETED SUCCESSFULLY!");
+  console.log("🎉 MANDATEOS V3 SEED COMPLETED SUCCESSFULLY!");
   console.log("========================================================");
-  console.log("👤 Demo Login User:   priya@mandateos.dev");
-  console.log("🔑 Demo Password:     MandateOS@2026");
-  console.log("🤖 Agent Mandate ID:  00000000-0000-0000-0000-000000000003");
-  console.log(`🔐 Agent Secret Key:  ${agent1Keypair.secretKey}`);
+  console.log("👤 Demo Login User:    priya@mandateos.dev");
+  console.log("🔑 Demo Password:      MandateOS@2026");
+  console.log("🤖 Primary Mandate ID: 00000000-0000-0000-0000-000000000003");
+  console.log(`🔐 Agent Secret Key:   ${agent1Keypair.secretKey}`);
   console.log("========================================================\n");
 
   process.exit(0);
 }
 
 seed().catch((err) => {
-  console.error("Seed failed:", err);
+  console.error("Seed sequence error:", err);
   process.exit(1);
 });
