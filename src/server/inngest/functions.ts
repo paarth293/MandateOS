@@ -17,16 +17,30 @@ export const recoverFailedPayment = inngest.createFunction(
     const payload = event.data as { transactionId: string; mandateId: string };
     const { transactionId, mandateId } = payload;
 
-    // Fetch initial mandate to check dynamic cooldown settings
-    const initialMandate = await step.run("fetch-mandate-cooldown", async () => {
-      const m = await db.query.mandates.findFirst({ where: eq(mandates.id, mandateId) });
-      return m ? { retryDelaySeconds: m.retryDelaySeconds } : { retryDelaySeconds: 30 };
+    // Fetch mandate and transaction to calculate exponential backoff with jitter
+    const retryConfig = await step.run("calculate-backoff-delay", async () => {
+      const [m, tx] = await Promise.all([
+        db.query.mandates.findFirst({ where: eq(mandates.id, mandateId) }),
+        db.query.transactions.findFirst({
+          where: eq(transactions.id, transactionId),
+        }),
+      ]);
+
+      const baseDelay = m?.retryDelaySeconds || 30;
+      const attempt = tx?.retryCount ?? 0;
+
+      // Exponential backoff with full jitter: (base * 2^attempt) + random(0, base * 0.5)
+      // Clamped to a maximum of 600 seconds to prevent indefinite delay
+      const exponentialDelay = baseDelay * 2 ** attempt;
+      const jitter = Math.floor(Math.random() * (baseDelay * 0.5));
+      const calculatedDelay = Math.min(600, Math.max(5, exponentialDelay + jitter));
+
+      return { delaySeconds: calculatedDelay, attempt };
     });
 
     // 1. THE COOLDOWN:
-    // Put function to sleep dynamically based on mandate policy (default 30s)
-    const delaySeconds = initialMandate.retryDelaySeconds || 30;
-    await step.sleep("wait-for-cooldown", `${delaySeconds}s`);
+    // Put function to sleep dynamically based on exponential backoff with anti-thundering herd jitter
+    await step.sleep("wait-for-cooldown", `${retryConfig.delaySeconds}s`);
 
     // 2. THE RECOVERY EXECUTION:
     const recoveryResult = await step.run("execute-retry", async () => {
