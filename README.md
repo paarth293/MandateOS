@@ -2,25 +2,76 @@
 
 **Cryptographically Secure Policy Engine for Autonomous AI Agents**
 
-MandateOS is the infrastructure layer that allows humans to safely give AI Agents money. It acts as a deterministic, mathematically verifiable firewall between an AI (like AutoGPT or LangChain) and a payment gateway (like Razorpay). 
+MandateOS is the security and governance control plane for agentic commerce. It acts as a deterministic, mathematically verifiable firewall between an AI (like AutoGPT, LangChain, or custom autonomous agents) and payment gateways (like Razorpay).
 
-## 🚀 The Architecture
+---
 
-1. **Deterministic Policy Engine**: Humans set strict, immutable rules (e.g., "Only buy Cloud Servers, maximum ₹5,000, max 3 silent retries"). AI Agents cannot hallucinate their way past this firewall.
-2. **The Chaos Engine (Resiliency)**: Built on **Inngest**, MandateOS handles catastrophic gateway failures (like a `504 BANK_TIMEOUT`) by safely putting the transaction to sleep and executing a "Silent Retry" 30 seconds later, completely abstracting the failure away from the AI.
-3. **Cryptographic Hash Chain**: Every action the system takes is verified by **Google Gemini** (generating a plain-English explanation) and then mathematically locked into a SHA-256 Hash Chain. If a single byte of the audit log is tampered with, the entire chain breaks.
+## 🚀 Key Architectural Pillars
+
+1. **Deterministic Policy Engine**: Humans establish immutable mandate policies (e.g., maximum transaction amount, daily/lifetime spend caps, approved merchant categories, and silent retry ceilings). Policies are evaluated deterministically in pure code, preventing AI hallucinations from draining funds.
+2. **Deterministic & Resilient Gateway (`GATEWAY_MODE`)**: Supports both live Razorpay processing and zero-dependency offline simulation (`GATEWAY_MODE=mock`). In mock mode, failures (`BANK_TIMEOUT`, `INSUFFICIENT_FUNDS`) and recoveries operate deterministically for offline demonstrations.
+3. **Durable Chaos & Recovery (Inngest)**: Catches downstream gateway failures, executes intelligent backoff cooldowns, and performs silent retries with idempotency without disrupting the AI Agent.
+4. **Cryptographic Hash Chain & AI Audit Trail**: Every system action and failure analysis from Google Gemini is hashed into an append-only SHA-256 chain linked to the previous block's hash. Any modification breaks verification across all subsequent blocks.
+
+---
 
 ## 🛠️ Tech Stack
-- **Framework**: Next.js 15 (App Router) + React
-- **Database**: Neon Postgres (Serverless) + Drizzle ORM
-- **Durability/Jobs**: Inngest (Serverless Queues)
-- **AI**: Google Gemini (Vercel AI SDK)
-- **Cryptography**: Ed25519 (TweetNaCl) + SHA-256
 
-## 💻 Local Setup
-1. Clone the repository
-2. `npm install`
-3. Add your `.env` variables (Neon, Razorpay, Gemini, Inngest)
-4. `npm run db:push` to sync the schema
-5. `npm run db:seed` to populate the dashboard
-6. `npm run dev` to start the application
+- **Framework**: Next.js 16 (App Router) + React 19
+- **Database**: Neon Postgres (Serverless) + Drizzle ORM
+- **Workflow & Queues**: Inngest v4
+- **AI & Schemas**: Google Gemini (Vercel AI SDK) + Zod
+- **Cryptography**: Ed25519 (TweetNaCl) + SHA-256
+- **Styling & Motion**: Tailwind CSS v4 + Framer Motion
+
+---
+
+## 💻 Local Setup & Development
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/paarth293/MandateOS.git
+cd MandateOS
+npm install
+```
+
+### 2. Configure Environment Variables
+Create a `.env` file in the root directory:
+```env
+# Database
+DATABASE_URL=postgresql://neondb_owner:...@ep-....aws.neon.tech/neondb?sslmode=require
+
+# Gateway Mode (mock for offline demo, live for real Razorpay)
+GATEWAY_MODE=mock
+RAZORPAY_KEY_ID=rzp_test_mock
+RAZORPAY_KEY_SECRET=mock_secret
+RAZORPAY_WEBHOOK_SECRET=mock_webhook_secret
+
+# AI Audit Trail
+GEMINI_API_KEY=your_gemini_api_key
+
+# Inngest (Optional locally with Inngest Dev Server)
+INNGEST_EVENT_KEY=local
+INNGEST_SIGNING_KEY=local
+```
+
+### 3. Database Schema & Seed
+```bash
+# Push schema to database
+npm run db:push
+
+# Populate database with demo users, mandates, and historical transactions
+npm run seed
+```
+
+### 4. Run the Application
+```bash
+# Terminal 1: Next.js dev server
+npm run dev
+
+# Terminal 2: Inngest local dev server
+npx inngest-cli@latest dev
+
+# Terminal 3: Simulate AI Agent purchase requests
+npx tsx src/scripts/simulateAgent.ts
+```
