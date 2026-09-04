@@ -8,6 +8,23 @@ import { evaluateMandatePolicy } from "@/server/policy";
 import { mandates, purchaseAttempts, transactions } from "@/server/schema";
 import { purchaseRequestSchema } from "@/server/validation";
 
+// In-memory sliding-window rate limiter (60 req/min per mandate)
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_REQUESTS_PER_WINDOW = 60;
+
+function checkRateLimit(mandateId: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(mandateId) || [];
+  const validTimestamps = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (validTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+  validTimestamps.push(now);
+  rateLimitMap.set(mandateId, validTimestamps);
+  return true;
+}
+
 export async function POST(req: Request) {
   let attemptId: string | null = null;
 
@@ -23,6 +40,17 @@ export async function POST(req: Request) {
     }
 
     const { mandateId, amountPaise, category } = parsedBody.data;
+
+    // 1b. Per-Mandate Rate Limiting Shield
+    if (!checkRateLimit(mandateId)) {
+      return NextResponse.json(
+        {
+          error: "RATE_LIMIT_EXCEEDED",
+          message: "Too many purchase requests for this mandate. Limit is 60 req/min.",
+        },
+        { status: 429 },
+      );
+    }
 
     // 2. Parse cryptographic headers
     const signature = req.headers.get("x-mandate-signature");
