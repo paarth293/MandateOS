@@ -1,8 +1,45 @@
 /* src/app/globals.css */
 @import "tailwindcss";
 
+:root {
+  --bg-primary: #f8fafc;
+  --bg-card: #ffffff;
+  --border-card: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+}
+
+.dark {
+  --bg-primary: #070b14;
+  --bg-card: #0d1424;
+  --border-card: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+}
+
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-200;
   }
+
+  .dark body {
+    background-color: #070b14;
+    color: #f8fafc;
+  }
+}
+
+/* Custom scrollbars for high-density operations logs */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
 }
