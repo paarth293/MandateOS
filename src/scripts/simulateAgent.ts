@@ -6,15 +6,18 @@ import { canonicalStringify, signData } from "@/lib/crypto";
 
 const API_URL = process.env.AGENT_API_URL || "http://localhost:3000/api/agent/purchase";
 const MANDATE_ID = process.env.MANDATE_ID || "00000000-0000-0000-0000-000000000003";
+const AGENT_KEY_PATH = process.env.AGENT_KEY_PATH || path.resolve(process.cwd(), "agent.key");
 
 // Read agent's private Ed25519 signing key
 function getAgentSecretKey(): string {
-  const keyPath = path.resolve(process.cwd(), "agent.key");
-  if (fs.existsSync(keyPath)) {
-    return fs.readFileSync(keyPath, "utf8").trim();
+  if (fs.existsSync(AGENT_KEY_PATH)) {
+    return fs.readFileSync(AGENT_KEY_PATH, "utf8").trim();
   }
-  // Fallback demo secret key matching seeded mandate
-  return "98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254";
+  // Fallback demo secret key matching seeded mandate or env override
+  return (
+    process.env.AGENT_SECRET_KEY ||
+    "98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254"
+  );
 }
 
 const secretKey = getAgentSecretKey();
@@ -116,11 +119,30 @@ async function runSimulation() {
 
   await new Promise((r) => setTimeout(r, 1500));
 
-  // Scenario 4: Replay Attack Defense
+  // Scenario 4: Stale Timestamp Attack (> 300s drift)
+  await executeSignedPurchase("4. Stale Timestamp Drift (> 300s Window)", {
+    category: "Cloud Servers",
+    amountPaise: 150000,
+    overrideTimestamp: Date.now() - 400 * 1000, // 400 seconds ago
+  });
+
+  await new Promise((r) => setTimeout(r, 1500));
+
+  // Scenario 5: Tampered Signature Forgery Attack
+  await executeSignedPurchase("5. Tampered Signature / Forgery Defense", {
+    category: "Cloud Servers",
+    amountPaise: 150000,
+    overrideSignature:
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  });
+
+  await new Promise((r) => setTimeout(r, 1500));
+
+  // Scenario 6: Replay Attack Defense
   if (firstTx) {
     console.log(`\n🚨 SIMULATING MAN-IN-THE-MIDDLE REPLAY ATTACK...`);
     console.log(`   Re-submitting intercepted request with identical nonce and Ed25519 signature.`);
-    await executeSignedPurchase("4. Replay Attack Interception", {
+    await executeSignedPurchase("6. Replay Attack Interception", {
       category: "Cloud Servers",
       amountPaise: 250000,
       overrideNonce: firstTx.nonce,
