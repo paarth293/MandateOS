@@ -63,4 +63,14 @@ describe("MandateOS End-to-End System Integration", () => {
 
     expect(verificationFails).toBe(true);
   });
+
+  it("should canonically stringify objects regardless of key insertion order", async () => {
+    const { canonicalStringify } = await import("@/lib/crypto");
+
+    const objA = { z: 1, a: 2, m: { y: "hello", x: "world" } };
+    const objB = { a: 2, m: { x: "world", y: "hello" }, z: 1 };
+
+    expect(canonicalStringify(objA)).toBe(canonicalStringify(objB));
+    expect(canonicalStringify(objA)).toBe('{"a":2,"m":{"x":"world","y":"hello"},"z":1}');
+  });
 });
