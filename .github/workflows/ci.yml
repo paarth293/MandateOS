@@ -1,0 +1,45 @@
+name: MandateOS CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Code Quality & Cryptographic Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Run Biome linter & formatting check
+        run: npx @biomejs/biome check .
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run Vitest unit & integration test suite
+        run: npm test
+
+      - name: Verify Next.js production build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://mock:mock@localhost:5432/mock
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          AGENT_SECRET_KEY: 98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254
