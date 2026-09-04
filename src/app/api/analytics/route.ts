@@ -90,7 +90,7 @@ export async function GET(_request: NextRequest) {
       .groupBy(purchaseAttempts.merchantCategory)
       .orderBy(desc(sql`coalesce(sum(${purchaseAttempts.amountPaise}), 0)`));
 
-    // 6. Per-Agent Policy Utilization
+    // 6. Per-Agent Policy Utilization (Optimized: 2 batch GROUP BY queries instead of 2N queries)
     const allMandates = await db.query.mandates.findMany({
       orderBy: (mandates, { desc }) => [desc(mandates.createdAt)],
     });
@@ -98,58 +98,65 @@ export async function GET(_request: NextRequest) {
     const startOfTodayUtc = new Date();
     startOfTodayUtc.setUTCHours(0, 0, 0, 0);
 
-    const agentMetrics = await Promise.all(
-      allMandates.map(async (mandate) => {
-        const [spentTodayRow] = await db
-          .select({
-            total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-          })
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.mandateId, mandate.id),
-              inArray(transactions.status, validSettledStatuses),
-              gte(transactions.createdAt, startOfTodayUtc),
-            ),
-          );
+    const [todayTotalsRows, lifetimeTotalsRows] = await Promise.all([
+      db
+        .select({
+          mandateId: transactions.mandateId,
+          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+        })
+        .from(transactions)
+        .where(
+          and(
+            inArray(transactions.status, validSettledStatuses),
+            gte(transactions.createdAt, startOfTodayUtc),
+          ),
+        )
+        .groupBy(transactions.mandateId),
+      db
+        .select({
+          mandateId: transactions.mandateId,
+          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+        })
+        .from(transactions)
+        .where(inArray(transactions.status, validSettledStatuses))
+        .groupBy(transactions.mandateId),
+    ]);
 
-        const [spentLifetimeRow] = await db
-          .select({
-            total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-          })
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.mandateId, mandate.id),
-              inArray(transactions.status, validSettledStatuses),
-            ),
-          );
+    const todayMap = new Map<string, number>();
+    for (const row of todayTotalsRows) {
+      todayMap.set(row.mandateId, Number(row.total));
+    }
 
-        const spentTodayPaise = Number(spentTodayRow?.total ?? 0);
-        const spentLifetimePaise = Number(spentLifetimeRow?.total ?? 0);
+    const lifetimeMap = new Map<string, number>();
+    for (const row of lifetimeTotalsRows) {
+      lifetimeMap.set(row.mandateId, Number(row.total));
+    }
 
-        const dailyUtilizationPercent = mandate.dailyLimitPaise
-          ? Math.min(100, Math.round((spentTodayPaise / mandate.dailyLimitPaise) * 100))
-          : null;
+    const agentMetrics = allMandates.map((mandate) => {
+      const spentTodayPaise = todayMap.get(mandate.id) ?? 0;
+      const spentLifetimePaise = lifetimeMap.get(mandate.id) ?? 0;
 
-        const lifetimeUtilizationPercent = mandate.lifetimeLimitPaise
-          ? Math.min(100, Math.round((spentLifetimePaise / mandate.lifetimeLimitPaise) * 100))
-          : null;
+      const dailyUtilizationPercent = mandate.dailyLimitPaise
+        ? Math.min(100, Math.round((spentTodayPaise / mandate.dailyLimitPaise) * 100))
+        : null;
 
-        return {
-          mandateId: mandate.id,
-          agentName: mandate.agentName,
-          status: mandate.status,
-          maxAmountPerTransaction: mandate.maxAmountPerTransaction,
-          dailyLimitPaise: mandate.dailyLimitPaise,
-          lifetimeLimitPaise: mandate.lifetimeLimitPaise,
-          spentTodayPaise,
-          spentLifetimePaise,
-          dailyUtilizationPercent,
-          lifetimeUtilizationPercent,
-        };
-      }),
-    );
+      const lifetimeUtilizationPercent = mandate.lifetimeLimitPaise
+        ? Math.min(100, Math.round((spentLifetimePaise / mandate.lifetimeLimitPaise) * 100))
+        : null;
+
+      return {
+        mandateId: mandate.id,
+        agentName: mandate.agentName,
+        status: mandate.status,
+        maxAmountPerTransaction: mandate.maxAmountPerTransaction,
+        dailyLimitPaise: mandate.dailyLimitPaise,
+        lifetimeLimitPaise: mandate.lifetimeLimitPaise,
+        spentTodayPaise,
+        spentLifetimePaise,
+        dailyUtilizationPercent,
+        lifetimeUtilizationPercent,
+      };
+    });
 
     const totalAttempts = successCount + recoveredCount + failedCount;
     const recoveryRatePercent =
