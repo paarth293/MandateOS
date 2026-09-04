@@ -45,7 +45,14 @@ export const recoverFailedPayment = inngest.createFunction(
 
       // If allowed, try Razorpay again
       try {
-        await MandateOSPaymentGateway.createOrder(tx.amount, mandate.id);
+        const isMock = process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID;
+        if (isMock) {
+          if (tx.nextRetryOutcome === "FAIL") {
+            throw new Error("MOCK_GATEWAY: Retried payment failed deterministically");
+          }
+        } else {
+          await MandateOSPaymentGateway.createOrder(tx.amount, mandate.id);
+        }
 
         await db
           .update(transactions)

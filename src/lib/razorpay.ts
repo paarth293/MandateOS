@@ -1,7 +1,7 @@
+import { randomUUID } from "node:crypto";
 import Razorpay from "razorpay";
 
 // 1. Initialize the official Razorpay SDK
-// (We provide safe mock fallbacks in case the .env isn't set up yet)
 export const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_mock",
   key_secret: process.env.RAZORPAY_KEY_SECRET || "mock_secret",
@@ -19,6 +19,11 @@ export const MandateOSPaymentGateway = {
     }
     if (simulateFailure === "CARD_EXPIRED") {
       throw new Error("GATEWAY_ERROR: The mandate card has expired");
+    }
+
+    // --- M0.8 OFFLINE MOCK MODE ---
+    if (process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID) {
+      return { id: `order_mock_${randomUUID()}` };
     }
 
     // --- REAL API CALL ---

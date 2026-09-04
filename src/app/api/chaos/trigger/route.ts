@@ -15,13 +15,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // 2. Force the database state to FAILED
-    // We are simulating what happens when Razorpay rejects a payment
+    // 2. Force the database state to FAILED and set deterministic recovery outcome
+    // BANK_TIMEOUT -> recoverable (SUCCESS on retry)
+    // INSUFFICIENT_FUNDS / CARD_EXPIRED -> non-recoverable (FAIL on retry)
+    const nextRetryOutcome = failureReason === "BANK_TIMEOUT" ? "SUCCESS" : "FAIL";
+
     await db
       .update(transactions)
       .set({
         status: "FAILED",
         failureReason: failureReason,
+        nextRetryOutcome,
       })
       .where(eq(transactions.id, transactionId));
 

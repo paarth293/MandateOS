@@ -54,7 +54,6 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
         >
           <option value="BANK_TIMEOUT">Bank Timeout (504)</option>
           <option value="INSUFFICIENT_FUNDS">Insufficient Funds (402)</option>
-          <option value="NETWORK_ERROR">Network Drop (503)</option>
         </select>
 
         <button

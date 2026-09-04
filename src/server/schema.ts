@@ -97,6 +97,9 @@ export const transactions = pgTable("transactions", {
   // The external ID from Razorpay (mocked or real)
   razorpayOrderId: varchar("razorpay_order_id", { length: 255 }),
 
+  // Defines deterministic outcome of next retry in mock mode
+  nextRetryOutcome: varchar("next_retry_outcome", { length: 20 }).default("SUCCESS").notNull(),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

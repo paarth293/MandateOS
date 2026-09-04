@@ -33,6 +33,8 @@ export async function POST(req: Request) {
     const merchant = await db.query.merchants.findFirst();
     if (!merchant) throw new Error("No merchants configured");
 
+    const order = await MandateOSPaymentGateway.createOrder(amountPaise, mandate.id);
+
     const txId = randomUUID();
     await db.insert(transactions).values({
       id: txId,
@@ -40,14 +42,13 @@ export async function POST(req: Request) {
       merchantId: merchant.id,
       amount: amountPaise,
       status: "PENDING",
+      razorpayOrderId: order.id,
     });
-
-    const orderId = await MandateOSPaymentGateway.createOrder(amountPaise, mandate.id);
 
     return NextResponse.json({
       success: true,
       transactionId: txId,
-      razorpayOrderId: orderId,
+      razorpayOrderId: order.id,
       message: "Purchase mathematically authorized by MandateOS.",
     });
   } catch (error) {
