@@ -7,26 +7,97 @@ export const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET || "mock_secret",
 });
 
-// 2. Our Custom Wrapper (The Chaos Console Engine)
+// 2. Gateway Circuit Breaker State Machine
+export type CircuitBreakerState = "CLOSED" | "OPEN" | "HALF_OPEN";
+
+class GatewayCircuitBreaker {
+  private state: CircuitBreakerState = "CLOSED";
+  private consecutiveFailures = 0;
+  private readonly failureThreshold = 5;
+  private readonly cooldownPeriodMs = 30000; // 30 seconds
+  private lastFailureTime = 0;
+
+  getStatus() {
+    this.checkCooldownTransition();
+    return {
+      state: this.state,
+      consecutiveFailures: this.consecutiveFailures,
+      failureThreshold: this.failureThreshold,
+      lastFailureTime: this.lastFailureTime,
+      cooldownPeriodMs: this.cooldownPeriodMs,
+    };
+  }
+
+  private checkCooldownTransition() {
+    if (this.state === "OPEN") {
+      const now = Date.now();
+      if (now - this.lastFailureTime >= this.cooldownPeriodMs) {
+        this.state = "HALF_OPEN";
+      }
+    }
+  }
+
+  canAttempt(): boolean {
+    this.checkCooldownTransition();
+    if (this.state === "OPEN") {
+      const elapsed = Math.round((Date.now() - this.lastFailureTime) / 1000);
+      const remaining = Math.max(0, Math.round(this.cooldownPeriodMs / 1000) - elapsed);
+      throw new Error(
+        `CIRCUIT_BREAKER_OPEN: Gateway circuit breaker TRIPPED after ${this.failureThreshold} consecutive banking failures. Halting outbound agent payment traffic (cooldown remaining: ${remaining}s).`,
+      );
+    }
+    return true;
+  }
+
+  recordSuccess() {
+    this.consecutiveFailures = 0;
+    this.state = "CLOSED";
+  }
+
+  recordFailure() {
+    this.consecutiveFailures += 1;
+    this.lastFailureTime = Date.now();
+    if (this.consecutiveFailures >= this.failureThreshold) {
+      this.state = "OPEN";
+    }
+  }
+
+  reset() {
+    this.state = "CLOSED";
+    this.consecutiveFailures = 0;
+    this.lastFailureTime = 0;
+  }
+}
+
+export const CircuitBreaker = new GatewayCircuitBreaker();
+
+// 3. Our Custom Gateway Wrapper with Circuit Breaker Interception
 export const MandateOSPaymentGateway = {
   async createOrder(amountPaise: number, mandateId: string, simulateFailure?: string) {
-    // --- CHAOS CONSOLE INTERCEPTION ---
+    // 1. Guard check through circuit breaker
+    CircuitBreaker.canAttempt();
+
+    // 2. Chaos Console Interception
     if (simulateFailure === "BANK_TIMEOUT") {
+      CircuitBreaker.recordFailure();
       throw new Error("GATEWAY_ERROR: Bank timed out during authorization");
     }
     if (simulateFailure === "INSUFFICIENT_FUNDS") {
+      CircuitBreaker.recordFailure();
       throw new Error("GATEWAY_ERROR: Customer account has insufficient funds");
     }
     if (simulateFailure === "CARD_EXPIRED") {
+      CircuitBreaker.recordFailure();
       throw new Error("GATEWAY_ERROR: The mandate card has expired");
     }
 
-    // --- M0.8 OFFLINE MOCK MODE ---
+    // 3. Offline Mock Mode
     if (process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID) {
+      CircuitBreaker.recordSuccess();
       return { id: `order_mock_${randomUUID()}` };
     }
 
-    // --- REAL API CALL ---
+    // 4. Real Razorpay API Call
     try {
       const order = await razorpay.orders.create({
         amount: amountPaise,
@@ -37,8 +108,10 @@ export const MandateOSPaymentGateway = {
           managedBy: "MandateOS",
         },
       });
+      CircuitBreaker.recordSuccess();
       return order;
     } catch (error) {
+      CircuitBreaker.recordFailure();
       console.error("Razorpay API Error:", error);
       throw new Error("Failed to create Razorpay Order");
     }
