@@ -178,6 +178,40 @@ export const generateAuditLog = inngest.createFunction(
       });
     });
 
+    // 4. Outbound Webhook Alert (if mandate has notifyUrl configured)
+    if (mandate?.notifyUrl) {
+      await step.run("dispatch-webhook-alert", async () => {
+        try {
+          const alertPayload = {
+            event: "mandate.alert",
+            mandateId: payload.mandateId,
+            agentName: mandate.agentName,
+            transactionId: payload.transactionId,
+            action: payload.action || (payload.retryCount > 0 ? "SILENT_RETRY" : "PAYMENT_FAILED"),
+            failureReason: payload.failureReason,
+            retryCount: payload.retryCount,
+            details: aiAnalysis,
+            timestamp: new Date().toISOString(),
+          };
+
+          const res = await fetch(mandate.notifyUrl!, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "MandateOS-AlertBot/1.0",
+            },
+            body: JSON.stringify(alertPayload),
+            signal: AbortSignal.timeout(5000),
+          });
+
+          return { dispatched: true, status: res.status };
+        } catch (err) {
+          console.error("Outbound webhook alert delivery failed:", err);
+          return { dispatched: false, error: String(err) };
+        }
+      });
+    }
+
     return { success: true };
   },
 );
