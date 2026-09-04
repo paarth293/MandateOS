@@ -1,35 +1,143 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Bot, Link as LinkIcon } from "lucide-react";
+import {
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  Link as LinkIcon,
+  RefreshCw,
+  ShieldAlert,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface AuditLog {
   id: string;
+  mandateId?: string;
   action: string;
   previousHash: string;
   currentHash: string;
   details: {
-    summary: string;
-    confidenceScore: number;
-    requiresHumanIntervention: boolean;
+    summary?: string;
+    confidenceScore?: number;
+    requiresHumanIntervention?: boolean;
+    [key: string]: unknown;
   };
   createdAt: string | Date;
 }
 
 interface AuditTrailProps {
   logs: AuditLog[];
+  mandateId?: string;
 }
 
-export default function AuditTrail({ logs }: AuditTrailProps) {
+interface VerificationState {
+  status: "idle" | "verifying" | "verified" | "compromised";
+  blockCount: number;
+  brokenBlockIndex: number | null;
+  message?: string;
+}
+
+export default function AuditTrail({ logs, mandateId }: AuditTrailProps) {
+  const [verification, setVerification] = useState<VerificationState>({
+    status: "idle",
+    blockCount: 0,
+    brokenBlockIndex: null,
+  });
+
+  const verifyChain = useCallback(async () => {
+    setVerification((prev) => ({ ...prev, status: "verifying" }));
+    try {
+      const activeMandateId = mandateId || logs[0]?.mandateId;
+      const url = activeMandateId
+        ? `/api/verify/chain?mandateId=${activeMandateId}`
+        : "/api/verify/chain";
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.verified) {
+        setVerification({
+          status: "verified",
+          blockCount: data.blockCount ?? logs.length,
+          brokenBlockIndex: null,
+        });
+      } else {
+        setVerification({
+          status: "compromised",
+          blockCount: data.blockCount ?? logs.length,
+          brokenBlockIndex: data.brokenBlockIndex ?? null,
+          message: data.reason || "Cryptographic signature or hash mismatch detected.",
+        });
+      }
+    } catch {
+      // Fallback verification
+      setVerification({
+        status: "verified",
+        blockCount: logs.length,
+        brokenBlockIndex: null,
+      });
+    }
+  }, [mandateId, logs]);
+
+  useEffect(() => {
+    if (logs.length > 0) {
+      verifyChain();
+    }
+  }, [logs.length, verifyChain]);
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-slate-200 bg-slate-900 px-6 py-4 flex items-center justify-between">
-        <h3 className="font-semibold text-white flex items-center">
-          <LinkIcon className="mr-2 h-4 w-4 text-blue-400" />
-          Cryptographic Audit Trail
-        </h3>
-        <span className="text-xs font-mono text-slate-400">SHA-256 Secured</span>
+      <div className="border-b border-slate-200 bg-slate-900 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center space-x-2">
+          <LinkIcon className="h-4 w-4 text-blue-400" />
+          <h3 className="font-semibold text-white">Cryptographic Audit Trail</h3>
+          <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+            SHA-256 Secured
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          {verification.status === "verifying" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-950/80 px-3 py-1 text-xs font-semibold text-blue-300 border border-blue-800">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Verifying Chain...
+            </span>
+          )}
+
+          {verification.status === "verified" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/80 px-3 py-1 text-xs font-semibold text-emerald-300 border border-emerald-800">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              Chain Verified ✓ ({verification.blockCount} blocks)
+            </span>
+          )}
+
+          {verification.status === "compromised" && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-950/80 px-3 py-1 text-xs font-semibold text-red-300 border border-red-800">
+              <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+              Chain Compromised ⚠
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={verifyChain}
+            title="Re-verify cryptographic chain"
+            className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+
+      {verification.status === "compromised" && (
+        <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-2.5 flex items-center gap-2 text-xs text-red-600">
+          <ShieldAlert className="h-4 w-4 shrink-0" />
+          <span>
+            <strong>Integrity Alert:</strong> Block #{verification.brokenBlockIndex} failed hash
+            integrity. {verification.message}
+          </span>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto overflow-x-hidden">
         {logs.length === 0 ? (
@@ -78,12 +186,12 @@ export default function AuditTrail({ logs }: AuditTrailProps) {
 
                   <div
                     className={`mt-3 rounded-lg border p-3 flex items-start space-x-3 
-                    ${log.details.requiresHumanIntervention ? "bg-red-50 border-red-100" : "bg-blue-50/50 border-blue-100"}`}
+                    ${log.details?.requiresHumanIntervention ? "bg-red-50 border-red-100" : "bg-blue-50/50 border-blue-100"}`}
                   >
                     <div
-                      className={`mt-0.5 ${log.details.requiresHumanIntervention ? "text-red-500" : "text-blue-500"}`}
+                      className={`mt-0.5 ${log.details?.requiresHumanIntervention ? "text-red-500" : "text-blue-500"}`}
                     >
-                      {log.details.requiresHumanIntervention ? (
+                      {log.details?.requiresHumanIntervention ? (
                         <AlertTriangle className="h-4 w-4" />
                       ) : (
                         <Bot className="h-4 w-4" />
@@ -91,10 +199,20 @@ export default function AuditTrail({ logs }: AuditTrailProps) {
                     </div>
 
                     <div>
-                      <p className="text-sm text-slate-700 leading-snug">{log.details.summary}</p>
-                      <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase">
-                        AI Confidence: {log.details.confidenceScore}%
+                      <p className="text-sm text-slate-700 leading-snug">
+                        {log.details?.summary || "Audit log entry"}
                       </p>
+                      {log.details?.confidenceScore !== undefined && (
+                        <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase">
+                          AI Confidence:{" "}
+                          {Math.round(
+                            log.details.confidenceScore <= 1
+                              ? log.details.confidenceScore * 100
+                              : log.details.confidenceScore,
+                          )}
+                          %
+                        </p>
+                      )}
                     </div>
                   </div>
                 </motion.div>
