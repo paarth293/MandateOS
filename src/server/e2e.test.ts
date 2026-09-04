@@ -32,20 +32,20 @@ describe("MandateOS End-to-End System Integration", () => {
 
     const block1Hash = generateAuditHash(
       "PAYMENT_FAILED",
-      '{"summary": "Bank timeout occurred."}',
+      { summary: "Bank timeout occurred." },
       genesisHash,
     );
     expect(block1Hash).toHaveLength(64);
 
     const block2Hash = generateAuditHash(
       "SILENT_RETRY",
-      '{"summary": "Successfully recovered payment via secondary node."}',
+      { summary: "Successfully recovered payment via secondary node." },
       block1Hash,
     );
 
     const forgedBlock1Hash = generateAuditHash(
       "PAYMENT_FAILED",
-      '{"summary": "Attacker manipulated this log."}',
+      { summary: "Attacker manipulated this log." },
       genesisHash,
     );
 
@@ -55,7 +55,7 @@ describe("MandateOS End-to-End System Integration", () => {
       block2Hash !==
       generateAuditHash(
         "SILENT_RETRY",
-        '{"summary": "Successfully recovered payment via secondary node."}',
+        { summary: "Successfully recovered payment via secondary node." },
         forgedBlock1Hash,
       );
 

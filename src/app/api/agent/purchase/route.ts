@@ -30,11 +30,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const merchant = await db.query.merchants.findFirst();
+    if (!merchant) throw new Error("No merchants configured");
+
     const txId = randomUUID();
     await db.insert(transactions).values({
       id: txId,
       mandateId: mandate.id,
-      merchantId: mandate.merchantId,
+      merchantId: merchant.id,
       amount: amountPaise,
       status: "PENDING",
     });

@@ -34,7 +34,6 @@ async function seed() {
     .values({
       id: mandateId,
       userId: userId,
-      merchantId: merchantId,
       agentName: "AutoGPT Procurement Agent",
       publicKey: "mock_pub_key",
       signature: "mock_signature",
