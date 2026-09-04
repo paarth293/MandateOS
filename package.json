@@ -11,9 +11,12 @@
     "check": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "seed": "tsx src/server/seed.ts"
+    "seed": "tsx src/server/seed.ts",
+    "agent:simulate": "tsx src/scripts/simulateAgent.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.62",
