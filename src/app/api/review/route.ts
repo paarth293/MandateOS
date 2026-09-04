@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { inngest } from "@/server/inngest/client";
-import { transactions, users } from "@/server/schema";
+import { transactions } from "@/server/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get("filter") || "pending"; // "pending" | "reviewed" | "all"
 
@@ -51,6 +56,17 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role === "VIEWER") {
+      return NextResponse.json(
+        { error: "Forbidden: Viewers cannot perform review actions" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const { transactionId, action } = body as {
       transactionId?: string;
@@ -59,16 +75,6 @@ export async function POST(request: NextRequest) {
 
     if (!transactionId) {
       return NextResponse.json({ error: "transactionId is required" }, { status: 400 });
-    }
-
-    let user = await getSessionUser();
-    if (!user) {
-      user =
-        (await db.query.users.findFirst({
-          where: eq(users.role, "ADMIN"),
-        })) ??
-        (await db.query.users.findFirst()) ??
-        null;
     }
 
     const tx = await db.query.transactions.findFirst({
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest) {
     }
 
     const reviewedAt = new Date();
-    const reviewedBy = user?.id ?? null;
+    const reviewedBy = user.id;
 
     if (action === "APPROVE_RETRY") {
       // Reset retry count and re-trigger recovery
