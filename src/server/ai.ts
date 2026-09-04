@@ -36,9 +36,9 @@ export async function analyzeTransactionFailure(
   `;
 
   try {
-    // We use Gemini 1.5 Flash because it is incredibly fast (~1s) for live demos
+    // We use Gemini 2.0 Flash for sub-second incident diagnosis during live ops
     const { object } = await generateObject({
-      model: google("models/gemini-1.5-flash-latest"),
+      model: google("gemini-2.0-flash"),
       schema: auditLogSchema,
       prompt: prompt,
     });
