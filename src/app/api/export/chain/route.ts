@@ -9,17 +9,24 @@ import { auditLogs, mandates } from "@/server/schema";
 
 export const dynamic = "force-dynamic";
 
-function getAgentSecretKey(): string {
+/**
+ * Resolves the Ed25519 secret key used to sign export manifests.
+ * Returns null when no key is configured: the export is then emitted as
+ * explicitly UNSIGNED rather than silently "signed" with a hardcoded key
+ * that anyone could read from source code (forgery risk).
+ */
+function getAgentSecretKey(): string | null {
   const keyPath = process.env.AGENT_KEY_PATH || path.resolve(process.cwd(), "agent.key");
-  if (fs.existsSync(keyPath)) {
+  // Runtime-only file read (agent.key lives beside the running process, never
+  // bundled): opt out of Turbopack's whole-project tracing for this call.
+  if (fs.existsSync(/* turbopackIgnore: true */ keyPath)) {
     try {
-      return fs.readFileSync(keyPath, "utf8").trim();
+      const key = fs.readFileSync(/* turbopackIgnore: true */ keyPath, "utf8").trim();
+      if (key) return key;
     } catch (_e) {}
   }
-  return (
-    process.env.AGENT_SECRET_KEY ||
-    "98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254"
-  );
+  const envKey = process.env.AGENT_SECRET_KEY;
+  return envKey && envKey.trim().length > 0 ? envKey.trim() : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -91,13 +98,18 @@ export async function GET(request: NextRequest) {
     const manifestCanonical = canonicalStringify(manifestBody);
     const manifestHash = crypto.createHash("sha256").update(manifestCanonical).digest("hex");
 
-    // Sign manifest hash with Ed25519 key
-    let manifestSignature = "";
-    try {
-      const secretKey = getAgentSecretKey();
-      manifestSignature = signData(manifestHash, secretKey);
-    } catch (_e) {
-      manifestSignature = "SIG_SIGNING_FALLBACK_UNSIGNED";
+    // Sign manifest hash with Ed25519 key (only when a real key is configured)
+    let manifestSignature: string | null = null;
+    let signatureStatus: "SIGNED" | "UNSIGNED" = "UNSIGNED";
+    const secretKey = getAgentSecretKey();
+    if (secretKey) {
+      try {
+        manifestSignature = signData(manifestHash, secretKey);
+        signatureStatus = "SIGNED";
+      } catch (_e) {
+        // Leave UNSIGNED rather than emitting a forged signature.
+        manifestSignature = null;
+      }
     }
 
     const exportManifest = {
@@ -105,6 +117,7 @@ export async function GET(request: NextRequest) {
       manifestHash,
       signatureAlgorithm: "Ed25519",
       signature: manifestSignature,
+      signatureStatus,
     };
 
     // 5. Format response as CSV or JSON
@@ -112,7 +125,8 @@ export async function GET(request: NextRequest) {
       const csvHeader =
         "# MandateOS Tamper-Evident Signed Audit Chain Export\n" +
         `# Manifest Hash: ${manifestHash}\n` +
-        `# Signature: ${manifestSignature}\n` +
+        `# Signature: ${manifestSignature ?? "UNSIGNED"}\n` +
+        `# Signature Status: ${signatureStatus}\n` +
         `# Exported At: ${timestamp}\n` +
         `# Chain Integrity: ${isChainValid ? "VERIFIED_INTACT" : "INTEGRITY_COMPROMISED"}\n` +
         "index,id,mandate_id,transaction_id,action,previous_hash,current_hash,details_json,created_at\n";
@@ -141,7 +155,8 @@ export async function GET(request: NextRequest) {
           "Content-Type": "text/csv; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
           "x-manifest-hash": manifestHash,
-          "x-chain-signature": manifestSignature,
+          "x-chain-signature": manifestSignature ?? "UNSIGNED",
+          "x-chain-signature-status": signatureStatus,
         },
       });
     }
@@ -164,7 +179,8 @@ export async function GET(request: NextRequest) {
           "Content-Type": "application/json; charset=utf-8",
           "Content-Disposition": `attachment; filename="${filename}"`,
           "x-manifest-hash": manifestHash,
-          "x-chain-signature": manifestSignature,
+          "x-chain-signature": manifestSignature ?? "UNSIGNED",
+          "x-chain-signature-status": signatureStatus,
         },
       },
     );

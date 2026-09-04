@@ -1,5 +1,24 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import Razorpay from "razorpay";
+
+/**
+ * Constant-time HMAC-SHA256 verification of a Razorpay webhook signature.
+ * Extracted so the webhook route's security check is unit-testable.
+ */
+export function verifyRazorpayWebhookSignature(
+  rawBody: string,
+  signature: string | null,
+  webhookSecret: string | null,
+): boolean {
+  if (!webhookSecret || !signature) return false;
+
+  const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+
+  const sigBuffer = Buffer.from(signature, "utf8");
+  const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+
+  return sigBuffer.length === expectedBuffer.length && timingSafeEqual(sigBuffer, expectedBuffer);
+}
 
 // 1. Initialize the official Razorpay SDK
 export const razorpay = new Razorpay({

@@ -1,8 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { ArrowUpRight, CheckCircle2, Clock, Receipt, RefreshCcw, XCircle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { getSessionUser } from "@/server/auth";
+import { getUserMandateIds } from "@/server/authz";
 import { db } from "@/server/db";
 import { mandates, transactions } from "@/server/schema";
 
@@ -15,6 +16,9 @@ export default async function TransactionsPage() {
     redirect("/login");
   }
 
+  // Multi-tenancy: only the authenticated user's own transactions.
+  const mandateIds = await getUserMandateIds(user.id);
+
   const txsWithMandates = await db
     .select({
       transaction: transactions,
@@ -22,6 +26,7 @@ export default async function TransactionsPage() {
     })
     .from(transactions)
     .leftJoin(mandates, eq(transactions.mandateId, mandates.id))
+    .where(inArray(transactions.mandateId, mandateIds))
     .orderBy(desc(transactions.createdAt))
     .limit(100);
 

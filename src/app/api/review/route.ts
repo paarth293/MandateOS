@@ -1,6 +1,7 @@
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/server/auth";
+import { getUserMandateIds } from "@/server/authz";
 import { db } from "@/server/db";
 import { inngest } from "@/server/inngest/client";
 import { transactions } from "@/server/schema";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/review
- * Retrieves quarantined and exhausted transactions awaiting human review.
+ * Retrieves quarantined and exhausted transactions awaiting human review,
+ * scoped to the authenticated user's own mandates.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,24 +20,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Multi-tenancy: only surface quarantine items belonging to the user.
+    const mandateIds = await getUserMandateIds(user.id);
+
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get("filter") || "pending"; // "pending" | "reviewed" | "all"
 
-    let conditions = eq(transactions.status, "FAILED");
-    if (filter === "pending") {
-      conditions = and(
-        eq(transactions.status, "FAILED"),
-        isNull(transactions.reviewedAt),
-      ) as typeof conditions;
-    } else if (filter === "reviewed") {
-      conditions = and(
-        eq(transactions.status, "FAILED"),
-        isNotNull(transactions.reviewedAt),
-      ) as typeof conditions;
-    }
+    // Always: FAILED + owned by the user. Optional: review state filter.
+    const conditions = [
+      eq(transactions.status, "FAILED"),
+      inArray(transactions.mandateId, mandateIds),
+      ...(filter === "pending" ? [isNull(transactions.reviewedAt)] : []),
+      ...(filter === "reviewed" ? [isNotNull(transactions.reviewedAt)] : []),
+    ];
 
     const items = await db.query.transactions.findMany({
-      where: conditions,
+      where: and(...conditions),
       orderBy: [desc(transactions.createdAt)],
       limit: 50,
       with: {
@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/review
  * Human review action: ACKNOWLEDGE, APPROVE_RETRY, or DISMISS.
+ * Only the owning user may act on a quarantined transaction.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -82,6 +83,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (!tx) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    // Multi-tenancy: a user may only review transactions on their own mandates.
+    const mandateIds = await getUserMandateIds(user.id);
+    if (!mandateIds.includes(tx.mandateId)) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 

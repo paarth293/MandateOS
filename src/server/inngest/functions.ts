@@ -1,11 +1,18 @@
 import crypto from "node:crypto";
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { canonicalStringify, generateAuditHash } from "@/lib/crypto";
-import { MandateOSPaymentGateway } from "@/lib/razorpay";
 import { analyzeTransactionFailure } from "../ai";
 import { db } from "../db";
-import { evaluateMandatePolicy } from "../policy";
-import { anchors, auditLogs, mandates, transactions } from "../schema";
+import { executeRetry } from "../recovery";
+import {
+  anchors,
+  auditLogs,
+  authAttempts,
+  mandates,
+  purchaseAttempts,
+  sessions,
+  transactions,
+} from "../schema";
 import { inngest } from "./client";
 
 export const recoverFailedPayment = inngest.createFunction(
@@ -43,140 +50,12 @@ export const recoverFailedPayment = inngest.createFunction(
     await step.sleep("wait-for-cooldown", `${retryConfig.delaySeconds}s`);
 
     // 2. THE RECOVERY EXECUTION:
-    const recoveryResult = await step.run("execute-retry", async () => {
-      // Fetch fresh transaction and mandate state
-      const tx = await db.query.transactions.findFirst({
-        where: eq(transactions.id, transactionId),
-      });
-      const mandate = await db.query.mandates.findFirst({ where: eq(mandates.id, mandateId) });
-
-      if (!tx || !mandate) throw new Error("Data not found");
-
-      // Calculate cumulative spend totals
-      const startOfTodayUtc = new Date();
-      startOfTodayUtc.setUTCHours(0, 0, 0, 0);
-      const validStatuses = ["SUCCESS", "RECOVERED", "ORDER_CREATED", "PENDING"] as const;
-
-      const [dailyTotal] = await db
-        .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.mandateId, mandate.id),
-            inArray(transactions.status, validStatuses),
-            gte(transactions.createdAt, startOfTodayUtc),
-          ),
-        );
-
-      const [lifetimeTotal] = await db
-        .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(
-          and(eq(transactions.mandateId, mandate.id), inArray(transactions.status, validStatuses)),
-        );
-
-      // Check Deterministic Policy with live totals
-      const policyCheck = evaluateMandatePolicy(
-        tx.amount,
-        "Office Supplies",
-        mandate,
-        tx.retryCount,
-        {
-          spentTodayPaise: Number(dailyTotal?.total ?? 0),
-          spentLifetimePaise: Number(lifetimeTotal?.total ?? 0),
-        },
-      );
-
-      if (!policyCheck.allowed) {
-        return { success: false, reason: policyCheck.reason };
-      }
-
-      // 2. ATOMIC RETRY BUDGET CLAIM:
-      // Concurrency-safe atomic claim ensures parallel workers never exceed maxSilentRetries
-      const maxRetries = mandate.maxSilentRetries ?? 3;
-      const [claimedTx] = await db
-        .update(transactions)
-        .set({
-          retryCount: sql`${transactions.retryCount} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(transactions.id, transactionId), lt(transactions.retryCount, maxRetries)))
-        .returning();
-
-      if (!claimedTx) {
-        // Retry budget exhausted -> Quarantine transaction to FAILED for human review
-        await db
-          .update(transactions)
-          .set({
-            status: "FAILED",
-            failureReason: "RETRY_BUDGET_EXHAUSTED",
-            updatedAt: new Date(),
-          })
-          .where(eq(transactions.id, transactionId));
-
-        await inngest.send({
-          name: "audit/generate",
-          data: {
-            transactionId: tx.id,
-            mandateId: mandate.id,
-            failureReason: "RETRY_BUDGET_EXHAUSTED",
-            retryCount: tx.retryCount,
-            action: "RETRY_EXHAUSTED_QUARANTINED",
-          },
-        });
-
-        return {
-          success: false,
-          reason: `Retry budget exhausted (${tx.retryCount}/${maxRetries}). Quarantined for review.`,
-        };
-      }
-
-      // Try gateway again using the atomically claimed transaction
-      try {
-        const isMock = process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID;
-        if (isMock) {
-          if (claimedTx.nextRetryOutcome === "FAIL") {
-            throw new Error("MOCK_GATEWAY: Retried payment failed deterministically");
-          }
-
-          // Mock mode: Settle to RECOVERED immediately
-          await db
-            .update(transactions)
-            .set({ status: "RECOVERED" })
-            .where(eq(transactions.id, claimedTx.id));
-
-          return {
-            success: true,
-            reason: "Payment recovered after silent retry.",
-          };
-        }
-
-        // Live mode: Dispatch order to Razorpay and transition to ORDER_CREATED
-        const newOrder = await MandateOSPaymentGateway.createOrder(claimedTx.amount, mandate.id);
-
-        await db
-          .update(transactions)
-          .set({
-            status: "ORDER_CREATED",
-            razorpayOrderId: newOrder.id,
-          })
-          .where(eq(transactions.id, claimedTx.id));
-
-        return {
-          success: true,
-          reason: "Retry order created at gateway; awaiting webhook settlement.",
-        };
-      } catch (_error) {
-        if (claimedTx.retryCount >= maxRetries) {
-          await db
-            .update(transactions)
-            .set({ status: "FAILED", failureReason: "MAX_RETRIES_EXCEEDED" })
-            .where(eq(transactions.id, claimedTx.id));
-        }
-
-        return { success: false, reason: "Retry failed at gateway." };
-      }
-    });
+    // Delegated to the shared recovery engine (src/server/recovery.ts), which
+    // re-evaluates policy with the transaction's REAL merchant category and
+    // atomically claims retry budget before dispatching to the gateway.
+    const recoveryResult = await step.run("execute-retry", () =>
+      executeRetry(transactionId, mandateId),
+    );
 
     return recoveryResult;
   },
@@ -407,5 +286,52 @@ export const publishAuditAnchor = inngest.createFunction(
     }
 
     return { publishedAnchors: publishedCount };
+  },
+);
+
+export const pruneStaleData = inngest.createFunction(
+  {
+    id: "prune-stale-data",
+    triggers: [{ cron: "0 * * * *" }],
+  },
+  async ({ step }) => {
+    // Bounds every high-volume table so it cannot grow without limit:
+    // - purchase_attempts (nonce replay shield / rate limiter / telemetry):
+    //   nonces are single-use and only meaningful inside the 60s rate window
+    //   plus the 300s timestamp-drift window, so 1 hour of retention is ample.
+    // - sessions: expired sessions are dead weight (login purges create new rows).
+    // - auth_attempts: login brute-force telemetry only needs ~1 day.
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const prunedAttempts = await step.run("prune-stale-purchase-attempts", async () => {
+      const rows = await db
+        .delete(purchaseAttempts)
+        .where(lt(purchaseAttempts.createdAt, oneHourAgo))
+        .returning({ id: purchaseAttempts.id });
+      return rows.length;
+    });
+
+    const prunedSessions = await step.run("prune-expired-sessions", async () => {
+      const rows = await db
+        .delete(sessions)
+        .where(lt(sessions.expiresAt, new Date()))
+        .returning({ id: sessions.id });
+      return rows.length;
+    });
+
+    const prunedAuthAttempts = await step.run("prune-stale-auth-attempts", async () => {
+      const rows = await db
+        .delete(authAttempts)
+        .where(lt(authAttempts.createdAt, oneDayAgo))
+        .returning({ id: authAttempts.id });
+      return rows.length;
+    });
+
+    return {
+      prunedPurchaseAttempts: prunedAttempts,
+      prunedSessions,
+      prunedAuthAttempts,
+    };
   },
 );

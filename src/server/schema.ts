@@ -1,5 +1,15 @@
 // src/server/schema.ts
-import { integer, jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 // --- USER ROLES ---
 export const userRoleEnum = pgEnum("user_role", ["OWNER", "ADMIN", "VIEWER"]);
@@ -104,6 +114,12 @@ export const transactions = pgTable("transactions", {
     .references(() => merchants.id)
     .notNull(),
 
+  // The merchant category this transaction was authorized under at purchase time.
+  // Denormalized so the silent-retry recovery path can re-evaluate policy with
+  // the REAL category instead of a hardcoded value. Nullable for legacy rows;
+  // the recovery path falls back to the merchant's business category.
+  merchantCategory: varchar("merchant_category", { length: 100 }),
+
   amount: integer("amount").notNull(), // Stored in Paise
 
   status: transactionStatusEnum("status").default("PENDING").notNull(),
@@ -128,20 +144,43 @@ export const transactions = pgTable("transactions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// --- PURCHASE ATTEMPTS (Replay Protection & Auditing) ---
-export const purchaseAttempts = pgTable("purchase_attempts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  mandateId: uuid("mandate_id")
-    .references(() => mandates.id)
-    .notNull(),
-  merchantCategory: varchar("merchant_category", { length: 100 }),
-  amountPaise: integer("amount_paise").notNull(),
-  nonce: varchar("nonce", { length: 128 }).notNull().unique(),
-  outcome: varchar("outcome", { length: 20 }).notNull(), // PENDING, ALLOWED, BLOCKED
-  reason: varchar("reason", { length: 500 }),
-  transactionId: uuid("transaction_id").references(() => transactions.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// --- PURCHASE ATTEMPTS (Replay Protection, Rate Limiting & Auditing) ---
+// Every signed purchase request inserts a row here. The unique nonce provides
+// the replay shield; counting recent rows per mandate provides the sliding-window
+// rate limiter; outcome records the firewall verdict for telemetry. Rows are
+// pruned hourly by the Inngest `prune-stale-data` function.
+export const purchaseAttempts = pgTable(
+  "purchase_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    mandateId: uuid("mandate_id")
+      .references(() => mandates.id)
+      .notNull(),
+    merchantCategory: varchar("merchant_category", { length: 100 }),
+    amountPaise: integer("amount_paise").notNull(),
+    nonce: varchar("nonce", { length: 128 }).notNull().unique(),
+    outcome: varchar("outcome", { length: 20 }).notNull(), // PENDING, ALLOWED, BLOCKED, RATE_LIMITED
+    reason: varchar("reason", { length: 500 }),
+    transactionId: uuid("transaction_id").references(() => transactions.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("purchase_attempts_mandate_created_idx").on(table.mandateId, table.createdAt)],
+);
+
+// --- AUTH ATTEMPTS (Login Brute-Force Shield) ---
+// Records every login attempt per email+IP so the login route can reject
+// sustained brute-force runs. Rows are pruned daily by `prune-stale-data`.
+export const authAttempts = pgTable(
+  "auth_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    ip: varchar("ip", { length: 64 }).notNull(),
+    success: boolean("success").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("auth_attempts_email_created_idx").on(table.email, table.createdAt)],
+);
 
 // --- AUDIT LOGS (The Cryptographic Trust Trail) ---
 export const auditLogs = pgTable("audit_logs", {

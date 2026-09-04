@@ -1,6 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
 import { db } from "@/server/db";
 import { inngest } from "@/server/inngest/client";
 import { transactions } from "@/server/schema";
@@ -13,19 +13,7 @@ export async function POST(req: Request) {
 
     // Verify HMAC-SHA256 signature in live mode (or whenever secret is configured)
     if (process.env.GATEWAY_MODE !== "mock" && webhookSecret) {
-      if (!signature) {
-        return NextResponse.json({ error: "Missing signature header" }, { status: 400 });
-      }
-
-      const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-
-      const sigBuffer = Buffer.from(signature, "utf8");
-      const expectedBuffer = Buffer.from(expectedSignature, "utf8");
-
-      if (
-        sigBuffer.length !== expectedBuffer.length ||
-        !timingSafeEqual(sigBuffer, expectedBuffer)
-      ) {
+      if (!verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret)) {
         return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
       }
     }

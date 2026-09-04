@@ -268,12 +268,21 @@ async function seed() {
     },
   ];
 
+  // Map each seeded merchant to its business category so seeded transactions
+  // carry the denormalized merchantCategory used by the retry recovery path.
+  const merchantCategoryById: Record<string, string> = {
+    [merchant1Id]: "Office Supplies",
+    [merchant2Id]: "Cloud Servers",
+    [merchant3Id]: "Data Services",
+  };
+
   for (const t of transactionTemplates) {
     const isRecovered = t.status === "RECOVERED";
     await db.insert(transactions).values({
       id: randomUUID(),
       mandateId: t.mandateId,
       merchantId: t.merchantId,
+      merchantCategory: merchantCategoryById[t.merchantId],
       amount: t.amount,
       status: t.status,
       failureReason: t.failure,

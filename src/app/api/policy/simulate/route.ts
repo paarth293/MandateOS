@@ -1,9 +1,11 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getSessionUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { evaluateMandatePolicy } from "@/server/policy";
-import { mandates, transactions } from "@/server/schema";
+import { mandates } from "@/server/schema";
+import { getCommittedSpendTotals } from "@/server/spend";
 
 const simulatePolicySchema = z.object({
   mandateId: z.string().uuid("Invalid Mandate UUID format"),
@@ -14,6 +16,12 @@ const simulatePolicySchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // 0. Ownership check: only the mandate's owner may simulate against it.
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => null);
     const parsed = simulatePolicySchema.safeParse(body);
 
@@ -44,32 +52,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Compute current cumulative spends (read-only)
-    const startOfTodayUtc = new Date();
-    startOfTodayUtc.setUTCHours(0, 0, 0, 0);
-
-    const validStatuses = ["SUCCESS", "RECOVERED", "PENDING"] as const;
-
-    const [dailyTotalResult] = await db
-      .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.mandateId, mandate.id),
-          inArray(transactions.status, validStatuses),
-          gte(transactions.createdAt, startOfTodayUtc),
-        ),
+    // Ownership check: simulate only against the user's own mandate.
+    if (mandate.userId !== user.id) {
+      return NextResponse.json(
+        {
+          error: "MANDATE_NOT_FOUND",
+          message: `No mandate found with ID: ${mandateId}`,
+        },
+        { status: 404 },
       );
+    }
 
-    const [lifetimeTotalResult] = await db
-      .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
-      .where(
-        and(eq(transactions.mandateId, mandate.id), inArray(transactions.status, validStatuses)),
-      );
-
-    const spentTodayPaise = Number(dailyTotalResult?.total ?? 0);
-    const spentLifetimePaise = Number(lifetimeTotalResult?.total ?? 0);
+    // 2. Compute current cumulative committed spends (read-only)
+    const { spentTodayPaise, spentLifetimePaise } = await getCommittedSpendTotals(mandate.id);
 
     // 3. Evaluate policy
     const policyResult = evaluateMandatePolicy(amountPaise, category, mandate, retryCount, {

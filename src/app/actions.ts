@@ -20,6 +20,9 @@ export async function createPendingTransaction(mandateId: string, amountPaise: n
     merchantId: merchant.id,
     amount: amountPaise,
     status: "PENDING",
+    // Denormalize the category so the silent-retry recovery path can
+    // re-evaluate policy with the real category (never a hardcoded value).
+    merchantCategory: merchant.businessCategory,
   });
 
   return txId;

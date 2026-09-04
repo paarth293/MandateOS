@@ -1,17 +1,32 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/server/auth";
+import { getUserMandateIds } from "@/server/authz";
 import { db } from "@/server/db";
-import { purchaseAttempts, transactions } from "@/server/schema";
+import { mandates, purchaseAttempts, transactions } from "@/server/schema";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/analytics
- * Returns comprehensive financial analytics: burn rate, category breakdowns,
- * autonomous recovery savings, and agent policy utilization.
+ * Returns financial analytics scoped to the authenticated user's mandates:
+ * burn rate, category breakdowns, autonomous recovery savings, and agent
+ * policy utilization.
+ *
+ * NOTE on definitions: reporting here uses SETTLED statuses (SUCCESS/RECOVERED)
+ * only — this is a business-reporting view, deliberately distinct from the
+ * COMMITTED spend set used for policy enforcement (see src/server/spend.ts).
  */
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Multi-tenancy: scope every aggregate to the user's own mandates.
+    const mandateIds = await getUserMandateIds(user.id);
+
     const validSettledStatuses: (
       | "PENDING"
       | "ORDER_CREATED"
@@ -27,7 +42,12 @@ export async function GET(_request: NextRequest) {
         totalTransactions: sql<number>`count(*)`,
       })
       .from(transactions)
-      .where(inArray(transactions.status, validSettledStatuses));
+      .where(
+        and(
+          inArray(transactions.mandateId, mandateIds),
+          inArray(transactions.status, validSettledStatuses),
+        ),
+      );
 
     // 2. Breakdown by Status
     const statusCounts = await db
@@ -37,6 +57,7 @@ export async function GET(_request: NextRequest) {
         volumePaise: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
       })
       .from(transactions)
+      .where(inArray(transactions.mandateId, mandateIds))
       .groupBy(transactions.status);
 
     const countsMap: Record<string, { count: number; volumePaise: number }> = {};
@@ -59,7 +80,12 @@ export async function GET(_request: NextRequest) {
         blockedVolumePaise: sql<number>`coalesce(sum(${purchaseAttempts.amountPaise}), 0)`,
       })
       .from(purchaseAttempts)
-      .where(eq(purchaseAttempts.outcome, "BLOCKED"));
+      .where(
+        and(
+          eq(purchaseAttempts.outcome, "BLOCKED"),
+          inArray(purchaseAttempts.mandateId, mandateIds),
+        ),
+      );
 
     // 4. Burn Rate - Last 7 Days Volume
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -72,6 +98,7 @@ export async function GET(_request: NextRequest) {
       .from(transactions)
       .where(
         and(
+          inArray(transactions.mandateId, mandateIds),
           inArray(transactions.status, validSettledStatuses),
           gte(transactions.createdAt, sevenDaysAgo),
         ),
@@ -87,11 +114,13 @@ export async function GET(_request: NextRequest) {
         totalPaise: sql<number>`coalesce(sum(${purchaseAttempts.amountPaise}), 0)`,
       })
       .from(purchaseAttempts)
+      .where(inArray(purchaseAttempts.mandateId, mandateIds))
       .groupBy(purchaseAttempts.merchantCategory)
       .orderBy(desc(sql`coalesce(sum(${purchaseAttempts.amountPaise}), 0)`));
 
     // 6. Per-Agent Policy Utilization (Optimized: 2 batch GROUP BY queries instead of 2N queries)
     const allMandates = await db.query.mandates.findMany({
+      where: inArray(mandates.id, mandateIds),
       orderBy: (mandates, { desc }) => [desc(mandates.createdAt)],
     });
 
@@ -107,6 +136,7 @@ export async function GET(_request: NextRequest) {
         .from(transactions)
         .where(
           and(
+            inArray(transactions.mandateId, mandateIds),
             inArray(transactions.status, validSettledStatuses),
             gte(transactions.createdAt, startOfTodayUtc),
           ),
@@ -118,7 +148,12 @@ export async function GET(_request: NextRequest) {
           total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
         })
         .from(transactions)
-        .where(inArray(transactions.status, validSettledStatuses))
+        .where(
+          and(
+            inArray(transactions.mandateId, mandateIds),
+            inArray(transactions.status, validSettledStatuses),
+          ),
+        )
         .groupBy(transactions.mandateId),
     ]);
 

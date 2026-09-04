@@ -42,4 +42,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://mock:mock@localhost:5432/mock
           NEXT_PUBLIC_APP_URL: http://localhost:3000
-          AGENT_SECRET_KEY: 98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254
+        # NOTE: AGENT_SECRET_KEY / AGENT_KEY_PATH must NOT be set here — the audit
+        # chain export route reads them at request time, and a hardcoded key in
+        # CI/source would make exported "signatures" forgeable. Leave unset.

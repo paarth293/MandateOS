@@ -1,29 +1,21 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { canonicalStringify, verifySignature } from "@/lib/crypto";
+import { shouldRateLimit } from "@/lib/rateLimit";
 import { MandateOSPaymentGateway } from "@/lib/razorpay";
 import { db } from "@/server/db";
 import { evaluateMandatePolicy } from "@/server/policy";
 import { mandates, purchaseAttempts, transactions } from "@/server/schema";
+import { getCommittedSpendTotals } from "@/server/spend";
 import { purchaseRequestSchema } from "@/server/validation";
 
-// In-memory sliding-window rate limiter (60 req/min per mandate)
-const rateLimitMap = new Map<string, number[]>();
+// DB-backed sliding-window rate limiter (60 req/min per mandate).
+// Attempts are counted from the purchase_attempts table, which is the same
+// durable store used for replay protection, so the limit survives restarts and
+// is shared across server instances (unlike the old in-memory Map).
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 60;
-
-function checkRateLimit(mandateId: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(mandateId) || [];
-  const validTimestamps = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (validTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-    return false;
-  }
-  validTimestamps.push(now);
-  rateLimitMap.set(mandateId, validTimestamps);
-  return true;
-}
 
 export async function POST(req: Request) {
   let attemptId: string | null = null;
@@ -40,17 +32,6 @@ export async function POST(req: Request) {
     }
 
     const { mandateId, amountPaise, category } = parsedBody.data;
-
-    // 1b. Per-Mandate Rate Limiting Shield
-    if (!checkRateLimit(mandateId)) {
-      return NextResponse.json(
-        {
-          error: "RATE_LIMIT_EXCEEDED",
-          message: "Too many purchase requests for this mandate. Limit is 60 req/min.",
-        },
-        { status: 429 },
-      );
-    }
 
     // 2. Parse cryptographic headers
     const signature = req.headers.get("x-mandate-signature");
@@ -108,7 +89,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 6. Nonce Replay Shield Check (Database Unique Constraint)
+    // 6. Nonce Replay Shield Check (Database Unique Constraint).
+    //    Every SIGNED request inserts an attempt row first: the unique nonce
+    //    blocks replays (23505 -> 409) and the row doubles as the rate-limit
+    //    event log and firewall telemetry. Unsigned junk never reaches the DB.
     attemptId = randomUUID();
     try {
       await db.insert(purchaseAttempts).values({
@@ -133,38 +117,50 @@ export async function POST(req: Request) {
       throw insertError;
     }
 
-    // 7. Calculate Cumulative Spend Totals (Daily UTC & Lifetime)
-    const startOfTodayUtc = new Date();
-    startOfTodayUtc.setUTCHours(0, 0, 0, 0);
-
-    const validStatuses = ["SUCCESS", "RECOVERED", "PENDING"] as const;
-
-    const [dailyTotalResult] = await db
-      .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
+    // 7. DB-backed Per-Mandate Sliding-Window Rate Limit.
+    //    Enforced AFTER signature verification, so only signed requests count
+    //    and unsigned junk never consumes budget or touches the DB.
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
+    const recentAttempts = await db
+      .select({ createdAt: purchaseAttempts.createdAt })
+      .from(purchaseAttempts)
       .where(
         and(
-          eq(transactions.mandateId, mandate.id),
-          inArray(transactions.status, validStatuses),
-          gte(transactions.createdAt, startOfTodayUtc),
+          eq(purchaseAttempts.mandateId, mandate.id),
+          gte(purchaseAttempts.createdAt, windowStart),
         ),
       );
 
-    const [lifetimeTotalResult] = await db
-      .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
-      .where(
-        and(eq(transactions.mandateId, mandate.id), inArray(transactions.status, validStatuses)),
+    if (
+      shouldRateLimit(
+        recentAttempts.map((attempt) => attempt.createdAt.getTime()),
+        Date.now(),
+        RATE_LIMIT_WINDOW_MS,
+        MAX_REQUESTS_PER_WINDOW,
+      )
+    ) {
+      await db
+        .update(purchaseAttempts)
+        .set({
+          outcome: "RATE_LIMITED",
+          reason: `RATE_LIMIT_EXCEEDED: More than ${MAX_REQUESTS_PER_WINDOW} requests per minute for this mandate.`,
+        })
+        .where(eq(purchaseAttempts.id, attemptId));
+
+      return NextResponse.json(
+        {
+          error: "RATE_LIMIT_EXCEEDED",
+          message: `Too many purchase requests for this mandate. Limit is ${MAX_REQUESTS_PER_WINDOW} req/min.`,
+        },
+        { status: 429 },
       );
+    }
 
-    const spentTodayPaise = Number(dailyTotalResult?.total ?? 0);
-    const spentLifetimePaise = Number(lifetimeTotalResult?.total ?? 0);
+    // 8. Calculate Cumulative Committed Spend Totals (Daily UTC & Lifetime)
+    const totals = await getCommittedSpendTotals(mandate.id);
 
-    // 8. Deterministic Policy Evaluation (Single swipe + Daily + Lifetime limits)
-    const policyCheck = evaluateMandatePolicy(amountPaise, category, mandate, 0, {
-      spentTodayPaise,
-      spentLifetimePaise,
-    });
+    // 9. Deterministic Policy Evaluation (Single swipe + Daily + Lifetime limits)
+    const policyCheck = evaluateMandatePolicy(amountPaise, category, mandate, 0, totals);
 
     if (!policyCheck.allowed) {
       if (attemptId) {
@@ -183,14 +179,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // 9. Fetch Merchant
+    // 10. Fetch Merchant
     const merchant = await db.query.merchants.findFirst();
     if (!merchant) throw new Error("No merchants configured");
 
-    // 10. Gateway Order Creation (Mock or Live)
+    // 11. Gateway Order Creation (Mock or Live)
     const order = await MandateOSPaymentGateway.createOrder(amountPaise, mandate.id);
 
-    // 11. Transaction Row Insertion
+    // 12. Transaction Row Insertion.
+    //     Denormalizes the merchant category so silent-retry recovery can
+    //     re-evaluate policy against the category this purchase was truly
+    //     authorized under (fixes the hardcoded "Office Supplies" bug).
     const txId = randomUUID();
     await db.insert(transactions).values({
       id: txId,
@@ -199,9 +198,10 @@ export async function POST(req: Request) {
       amount: amountPaise,
       status: "ORDER_CREATED",
       razorpayOrderId: order.id,
+      merchantCategory: category,
     });
 
-    // 12. Update Purchase Attempt with Approval & Transaction Reference
+    // 13. Update Purchase Attempt with Approval & Transaction Reference
     if (attemptId) {
       await db
         .update(purchaseAttempts)

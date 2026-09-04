@@ -19,7 +19,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Multi-tenancy: only return mandates owned by the authenticated user.
     const list = await db.query.mandates.findMany({
+      where: eq(mandates.userId, user.id),
       orderBy: [desc(mandates.createdAt)],
     });
 
@@ -153,6 +155,11 @@ export async function PATCH(request: NextRequest) {
     });
 
     if (!existing) {
+      return NextResponse.json({ error: "Mandate not found" }, { status: 404 });
+    }
+
+    // Multi-tenancy: a user may only modify their own mandates.
+    if (existing.userId !== user.id) {
       return NextResponse.json({ error: "Mandate not found" }, { status: 404 });
     }
 

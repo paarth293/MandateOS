@@ -36,11 +36,14 @@ export async function analyzeTransactionFailure(
   `;
 
   try {
-    // We use Gemini 2.0 Flash for sub-second incident diagnosis during live ops
+    // We use Gemini 2.0 Flash for sub-second incident diagnosis during live ops.
+    // Hard timeout ensures a slow/hung LLM never stalls the Inngest recovery
+    // worker indefinitely — the deterministic fallback below takes over.
     const { object } = await generateObject({
       model: google("gemini-2.0-flash"),
       schema: auditLogSchema,
       prompt: prompt,
+      abortSignal: AbortSignal.timeout(10_000),
     });
 
     return object;

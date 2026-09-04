@@ -71,3 +71,19 @@ export function evaluateMandatePolicy(
 
   return { allowed: true, reason: "POLICY_PASSED" };
 }
+
+/**
+ * Resolves the merchant category a retried transaction must be re-evaluated
+ * against. Prefers the category recorded on the transaction row at purchase
+ * time; falls back to the merchant's business category for legacy rows that
+ * predate the denormalized column. Returns null when neither is available so
+ * the recovery path fails CLOSED (no retry) rather than guessing.
+ */
+export function resolveRetryCategory(
+  tx: { merchantCategory: string | null },
+  merchant: { businessCategory: string | null } | null,
+): string | null {
+  if (tx.merchantCategory) return tx.merchantCategory;
+  if (merchant?.businessCategory) return merchant.businessCategory;
+  return null;
+}
