@@ -153,8 +153,9 @@ export const generateAuditLog = inngest.createFunction(
 
     // 3. Append to Cryptographic Hash Chain
     await step.run("write-secure-log", async () => {
-      // Fetch the most recent log for the hash chain
+      // Fetch the most recent log for the mandate's hash chain
       const lastLog = await db.query.auditLogs.findFirst({
+        where: eq(auditLogs.mandateId, payload.mandateId),
         orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
       });
 
