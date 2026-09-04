@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { generateAuditHash } from "@/lib/crypto";
 import { MandateOSPaymentGateway } from "@/lib/razorpay";
 import { analyzeTransactionFailure } from "../ai";
@@ -13,17 +13,23 @@ export const recoverFailedPayment = inngest.createFunction(
     triggers: [{ event: "payment/failed" }],
   },
   async ({ event, step }) => {
-    // We strictly type the incoming event data here to ensure TypeScript safety
     const payload = event.data as { transactionId: string; mandateId: string };
     const { transactionId, mandateId } = payload;
 
+    // Fetch initial mandate to check dynamic cooldown settings
+    const initialMandate = await step.run("fetch-mandate-cooldown", async () => {
+      const m = await db.query.mandates.findFirst({ where: eq(mandates.id, mandateId) });
+      return m ? { retryDelaySeconds: m.retryDelaySeconds } : { retryDelaySeconds: 30 };
+    });
+
     // 1. THE COOLDOWN:
-    // Safely put this serverless function to sleep for 30 seconds.
-    await step.sleep("wait-for-cooldown", "30s");
+    // Put function to sleep dynamically based on mandate policy (default 30s)
+    const delaySeconds = initialMandate.retryDelaySeconds || 30;
+    await step.sleep("wait-for-cooldown", `${delaySeconds}s`);
 
     // 2. THE RECOVERY EXECUTION:
     const recoveryResult = await step.run("execute-retry", async () => {
-      // Fetch the transaction and mandate
+      // Fetch fresh transaction and mandate state
       const tx = await db.query.transactions.findFirst({
         where: eq(transactions.id, transactionId),
       });
@@ -31,35 +37,78 @@ export const recoverFailedPayment = inngest.createFunction(
 
       if (!tx || !mandate) throw new Error("Data not found");
 
-      // Check the Deterministic Policy
+      // Calculate cumulative spend totals
+      const startOfTodayUtc = new Date();
+      startOfTodayUtc.setUTCHours(0, 0, 0, 0);
+      const validStatuses = ["SUCCESS", "RECOVERED", "ORDER_CREATED", "PENDING"] as const;
+
+      const [dailyTotal] = await db
+        .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.mandateId, mandate.id),
+            inArray(transactions.status, validStatuses),
+            gte(transactions.createdAt, startOfTodayUtc),
+          ),
+        );
+
+      const [lifetimeTotal] = await db
+        .select({ total: sql<number>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(
+          and(eq(transactions.mandateId, mandate.id), inArray(transactions.status, validStatuses)),
+        );
+
+      // Check Deterministic Policy with live totals
       const policyCheck = evaluateMandatePolicy(
         tx.amount,
         "Office Supplies",
         mandate,
         tx.retryCount,
+        {
+          spentTodayPaise: Number(dailyTotal?.total ?? 0),
+          spentLifetimePaise: Number(lifetimeTotal?.total ?? 0),
+        },
       );
 
       if (!policyCheck.allowed) {
         return { success: false, reason: policyCheck.reason };
       }
 
-      // If allowed, try Razorpay again
+      // Try gateway again
       try {
         const isMock = process.env.GATEWAY_MODE === "mock" || !process.env.RAZORPAY_KEY_ID;
         if (isMock) {
           if (tx.nextRetryOutcome === "FAIL") {
             throw new Error("MOCK_GATEWAY: Retried payment failed deterministically");
           }
-        } else {
-          await MandateOSPaymentGateway.createOrder(tx.amount, mandate.id);
+
+          // Mock mode: Settle to RECOVERED immediately
+          await db
+            .update(transactions)
+            .set({ status: "RECOVERED", retryCount: tx.retryCount + 1 })
+            .where(eq(transactions.id, tx.id));
+
+          return { success: true, reason: "Payment recovered after silent retry." };
         }
+
+        // Live mode: Dispatch order to Razorpay and transition to ORDER_CREATED
+        const newOrder = await MandateOSPaymentGateway.createOrder(tx.amount, mandate.id);
 
         await db
           .update(transactions)
-          .set({ status: "RECOVERED", retryCount: tx.retryCount + 1 })
+          .set({
+            status: "ORDER_CREATED",
+            razorpayOrderId: newOrder.id,
+            retryCount: tx.retryCount + 1,
+          })
           .where(eq(transactions.id, tx.id));
 
-        return { success: true, reason: "Payment recovered after silent retry." };
+        return {
+          success: true,
+          reason: "Retry order created at gateway; awaiting webhook settlement.",
+        };
       } catch (_error) {
         await db
           .update(transactions)
@@ -85,18 +134,24 @@ export const generateAuditLog = inngest.createFunction(
       mandateId: string;
       failureReason: string;
       retryCount: number;
+      action?: string;
     };
 
-    // 1. Call Gemini (Durable Step)
-    const aiAnalysis = await step.run("analyze-with-gemini", async () => {
-      return await analyzeTransactionFailure(
-        payload.failureReason,
-        payload.retryCount,
-        2, // Assuming max 2 silent retries for this demo
-      );
+    // 1. Fetch mandate to read actual maxSilentRetries configuration (Defect A4a fix)
+    const mandate = await step.run("fetch-mandate-config", async () => {
+      return await db.query.mandates.findFirst({
+        where: eq(mandates.id, payload.mandateId),
+      });
     });
 
-    // 2. Cryptographic Hash Chain
+    const maxRetries = mandate?.maxSilentRetries ?? 3;
+
+    // 2. Call Gemini for plain English explanation
+    const aiAnalysis = await step.run("analyze-with-gemini", async () => {
+      return await analyzeTransactionFailure(payload.failureReason, payload.retryCount, maxRetries);
+    });
+
+    // 3. Append to Cryptographic Hash Chain
     await step.run("write-secure-log", async () => {
       // Fetch the most recent log for the hash chain
       const lastLog = await db.query.auditLogs.findFirst({
@@ -106,7 +161,8 @@ export const generateAuditLog = inngest.createFunction(
       const previousHash = lastLog
         ? lastLog.currentHash
         : "0000000000000000000000000000000000000000000000000000000000000000";
-      const action = payload.retryCount > 0 ? "SILENT_RETRY" : "PAYMENT_FAILED";
+
+      const action = payload.action || (payload.retryCount > 0 ? "SILENT_RETRY" : "PAYMENT_FAILED");
 
       const currentHash = generateAuditHash(action, aiAnalysis, previousHash);
 
@@ -114,7 +170,7 @@ export const generateAuditLog = inngest.createFunction(
         mandateId: payload.mandateId,
         transactionId: payload.transactionId,
         action,
-        details: aiAnalysis, // The strict JSON from Gemini
+        details: aiAnalysis,
         previousHash,
         currentHash,
       });
