@@ -1,5 +1,6 @@
 import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { auditLogs, mandates, transactions } from "@/server/schema";
 
@@ -7,6 +8,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    try {
+      await requireUser();
+    } catch {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const activeMandates = await db.query.mandates.findMany({
       orderBy: [desc(mandates.createdAt)],
     });

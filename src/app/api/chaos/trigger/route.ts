@@ -1,14 +1,23 @@
-// src/app/api/chaos/trigger/route.ts
-
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { inngest } from "@/server/inngest/client";
 import { transactions } from "@/server/schema";
 
 export async function POST(req: Request) {
   try {
-    // 1. Parse the injected chaos from the frontend
+    // 1. Role-based security check
+    try {
+      await requireRole(["OWNER", "ADMIN"]);
+    } catch {
+      return NextResponse.json(
+        { error: "Unauthorized. Requires OWNER or ADMIN role." },
+        { status: 403 },
+      );
+    }
+
+    // 2. Parse the injected chaos from the frontend
     const { transactionId, mandateId, failureReason } = await req.json();
 
     if (!transactionId || !mandateId || !failureReason) {
