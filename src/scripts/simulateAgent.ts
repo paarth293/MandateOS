@@ -8,19 +8,36 @@ const API_URL = process.env.AGENT_API_URL || "http://localhost:3000/api/agent/pu
 const MANDATE_ID = process.env.MANDATE_ID || "00000000-0000-0000-0000-000000000003";
 const AGENT_KEY_PATH = process.env.AGENT_KEY_PATH || path.resolve(process.cwd(), "agent.key");
 
-// Read agent's private Ed25519 signing key
-function getAgentSecretKey(): string {
+// Read agent's private Ed25519 signing key. There is deliberately NO hardcoded
+// fallback here: the key must come from the real agent.key written by
+// `npm run seed` (or AGENT_SECRET_KEY). A well-known fallback key in source
+// would let anyone forge signed purchases against a seeded mandate.
+function getAgentSecretKey(): string | null {
   if (fs.existsSync(AGENT_KEY_PATH)) {
-    return fs.readFileSync(AGENT_KEY_PATH, "utf8").trim();
+    const key = fs.readFileSync(AGENT_KEY_PATH, "utf8").trim();
+    if (key) return key;
   }
-  // Fallback demo secret key matching seeded mandate or env override
-  return (
-    process.env.AGENT_SECRET_KEY ||
-    "98fbea28cd0e3585684023ec1decae60ec0ef4d7060eb5cf8dac3b47103088a399be9a9d65d34abfe9af0bdb87ee3395c39a690e750969b48420ce2dee272254"
-  );
+  const envKey = process.env.AGENT_SECRET_KEY;
+  return envKey && envKey.trim().length > 0 ? envKey.trim() : null;
 }
 
-const secretKey = getAgentSecretKey();
+/**
+ * Loads the signing key or aborts with a clear message. The narrow return type
+ * (string) keeps callers free of null checks.
+ */
+function loadAgentSecretKey(): string {
+  const key = getAgentSecretKey();
+  if (!key) {
+    console.error(
+      "\n❌ No agent signing key found. Run `npm run seed` first (it writes agent.key), " +
+        "or set AGENT_KEY_PATH / AGENT_SECRET_KEY to the mandate's private key.\n",
+    );
+    process.exit(1);
+  }
+  return key;
+}
+
+const secretKey = loadAgentSecretKey();
 
 interface PurchaseOptions {
   category: string;

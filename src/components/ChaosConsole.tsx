@@ -2,7 +2,7 @@
 
 import { AlertOctagon, Loader2, Zap } from "lucide-react";
 import { useState } from "react";
-import { createPendingTransaction } from "@/app/actions";
+import { createPendingTransaction } from "@/app/(app)/actions";
 
 interface ChaosConsoleProps {
   activeMandateId: string;

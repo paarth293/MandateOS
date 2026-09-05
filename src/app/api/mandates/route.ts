@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { generateAuditHash, generateKeypair, signData } from "@/lib/crypto";
+import { appendAuditBlock } from "@/server/audit";
 import { getSessionUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { auditLogs, mandates } from "@/server/schema";
@@ -182,30 +183,11 @@ export async function PATCH(request: NextRequest) {
       .where(eq(mandates.id, id))
       .returning();
 
-    // If revoked, write audit log entry
+    // If revoked, append a tamper-evident audit block
     if (body.status === "REVOKED" && existing.status !== "REVOKED") {
-      const lastLog = await db.query.auditLogs.findFirst({
-        where: eq(auditLogs.mandateId, id),
-        orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
-      });
-
-      const previousHash = lastLog
-        ? lastLog.currentHash
-        : "0000000000000000000000000000000000000000000000000000000000000000";
-
-      const details = {
+      await appendAuditBlock(id, "MANDATE_REVOKED", {
         summary: `Mandate policy ${id} was revoked. Agent purchases are now hard-blocked.`,
         confidenceScore: 1.0,
-      };
-
-      const currentHash = generateAuditHash("MANDATE_REVOKED", details, previousHash);
-
-      await db.insert(auditLogs).values({
-        mandateId: id,
-        action: "MANDATE_REVOKED",
-        details,
-        previousHash,
-        currentHash,
       });
     }
 

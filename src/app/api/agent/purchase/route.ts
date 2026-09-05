@@ -6,7 +6,7 @@ import { shouldRateLimit } from "@/lib/rateLimit";
 import { MandateOSPaymentGateway } from "@/lib/razorpay";
 import { db } from "@/server/db";
 import { evaluateMandatePolicy } from "@/server/policy";
-import { mandates, purchaseAttempts, transactions } from "@/server/schema";
+import { mandates, merchants, purchaseAttempts, transactions } from "@/server/schema";
 import { getCommittedSpendTotals } from "@/server/spend";
 import { purchaseRequestSchema } from "@/server/validation";
 
@@ -179,9 +179,23 @@ export async function POST(req: Request) {
       );
     }
 
-    // 10. Fetch Merchant
-    const merchant = await db.query.merchants.findFirst();
-    if (!merchant) throw new Error("No merchants configured");
+    // 10. Fetch Merchant — route the order to a merchant whose business
+    //     category matches the signed category. Previously the first merchant
+    //     in the DB was always chosen, which could settle a "Cloud Servers"
+    //     purchase against an "Office Supplies" merchant.
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(merchants.businessCategory, category),
+    });
+
+    if (!merchant) {
+      return NextResponse.json(
+        {
+          error: "MERCHANT_UNAVAILABLE",
+          message: `No authorized merchant serves the '${category}' category. Add one or update the mandate's allowed categories.`,
+        },
+        { status: 422 },
+      );
+    }
 
     // 11. Gateway Order Creation (Mock or Live)
     const order = await MandateOSPaymentGateway.createOrder(amountPaise, mandate.id);

@@ -1,11 +1,10 @@
-import crypto from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
-import { canonicalStringify, generateAuditHash } from "@/lib/crypto";
+import { generateAuditHash } from "@/lib/crypto";
 import { analyzeTransactionFailure } from "../ai";
+import { publishAnchorForMandate } from "../anchoring";
 import { db } from "../db";
 import { executeRetry } from "../recovery";
 import {
-  anchors,
   auditLogs,
   authAttempts,
   mandates,
@@ -230,58 +229,8 @@ export const publishAuditAnchor = inngest.createFunction(
 
     for (const mandate of activeMandates) {
       await step.run(`anchor-mandate-${mandate.id}`, async () => {
-        // Fetch all audit logs for this mandate
-        const logs = await db.query.auditLogs.findMany({
-          where: eq(auditLogs.mandateId, mandate.id),
-          orderBy: (auditLogs, { asc }) => [asc(auditLogs.createdAt)],
-        });
-
-        if (logs.length === 0) return;
-
-        const lastBlock = logs[logs.length - 1];
-        const blockCount = logs.length;
-        const lastBlockHash = lastBlock.currentHash;
-
-        // Check latest anchor
-        const lastAnchor = await db.query.anchors.findFirst({
-          where: eq(anchors.mandateId, mandate.id),
-          orderBy: (anchors, { desc }) => [desc(anchors.anchoredAt)],
-        });
-
-        // Skip if already anchored at this block
-        if (
-          lastAnchor &&
-          lastAnchor.lastBlockHash === lastBlockHash &&
-          lastAnchor.blockCount === blockCount
-        ) {
-          return;
-        }
-
-        const previousAnchorHash = lastAnchor
-          ? lastAnchor.anchorHash
-          : "0000000000000000000000000000000000000000000000000000000000000000";
-
-        const timestamp = new Date();
-        const payload = canonicalStringify({
-          blockCount,
-          lastBlockHash,
-          mandateId: mandate.id,
-          previousAnchorHash,
-          timestamp: timestamp.toISOString(),
-        });
-
-        const anchorHash = crypto.createHash("sha256").update(payload).digest("hex");
-
-        await db.insert(anchors).values({
-          mandateId: mandate.id,
-          anchorHash,
-          previousAnchorHash,
-          lastBlockHash,
-          blockCount,
-          anchoredAt: timestamp,
-        });
-
-        publishedCount++;
+        const result = await publishAnchorForMandate(mandate.id);
+        if (result.published) publishedCount++;
       });
     }
 

@@ -162,10 +162,17 @@ export default function ArenaPage() {
               <div className="py-20 text-center text-xs text-slate-500 font-mono">
                 Awaiting incoming signed agent purchase events...
                 <br />
-                <span className="text-slate-600 mt-1 inline-block">
-                  Run <code className="text-blue-400">npm run agent:simulate</code> in your terminal
-                  to trigger live attacks.
-                </span>
+                {!connected ? (
+                  <span className="text-amber-400/90 mt-2 inline-block">
+                    Stream requires an authenticated session — the events you see are scoped to your
+                    own mandates.
+                  </span>
+                ) : (
+                  <span className="text-slate-600 mt-1 inline-block">
+                    Run <code className="text-blue-400">npm run agent:simulate</code> in your
+                    terminal to trigger live attacks.
+                  </span>
+                )}
               </div>
             ) : (
               events.map((evt) => {

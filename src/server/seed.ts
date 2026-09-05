@@ -24,6 +24,9 @@ async function seed() {
   const merchant1Id = "00000000-0000-0000-0000-000000000002";
   const merchant2Id = "00000000-0000-0000-0000-000000000022";
   const merchant3Id = "00000000-0000-0000-0000-000000000033";
+  const merchant4Id = "00000000-0000-0000-0000-000000000044";
+  const merchant5Id = "00000000-0000-0000-0000-000000000055";
+  const merchant6Id = "00000000-0000-0000-0000-000000000066";
 
   const mandate1Id = "00000000-0000-0000-0000-000000000003";
   const mandate2Id = "00000000-0000-0000-0000-000000000004";
@@ -79,6 +82,24 @@ async function seed() {
         name: "DataStream Analytics Hub",
         businessCategory: "Data Services",
         upiId: "datastream@razorpay",
+      },
+      {
+        id: merchant4Id,
+        name: "NeuralSaaS Inference",
+        businessCategory: "AI Inference",
+        upiId: "neuralsaas@razorpay",
+      },
+      {
+        id: merchant5Id,
+        name: "ByteBridge Software",
+        businessCategory: "Software",
+        upiId: "bytebridge@razorpay",
+      },
+      {
+        id: merchant6Id,
+        name: "APIHub Developer Services",
+        businessCategory: "APIs",
+        upiId: "apihub@razorpay",
       },
     ])
     .onConflictDoNothing();

@@ -1,5 +1,7 @@
-import { desc } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import type { NextRequest } from "next/server";
+import { getSessionUser } from "@/server/auth";
+import { getUserMandateIds } from "@/server/authz";
 import { db } from "@/server/db";
 import { purchaseAttempts, transactions } from "@/server/schema";
 
@@ -7,10 +9,27 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/events/stream
- * Server-Sent Events (SSE) endpoint providing a real-time event stream
- * of purchase attempts, firewall decisions, and transaction state changes.
+ * Server-Sent Events (SSE) endpoint providing a real-time event stream of
+ * purchase attempts, firewall decisions, and transaction state changes.
+ *
+ * Multi-tenancy: requires an authenticated session and only streams events
+ * belonging to the user's own mandates — raw attempt rows carry spend amounts
+ * and merchant categories and must never be visible cross-tenant.
  */
 export async function GET(req: NextRequest) {
+  const user = await getSessionUser();
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Empty mandate list (e.g. a VIEWER) simply yields no events — inArray with
+  // an empty list matches nothing.
+  const mandateIds = await getUserMandateIds(user.id);
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -41,16 +60,18 @@ export async function GET(req: NextRequest) {
         }
 
         try {
-          // Poll recent attempts since lastCheck
+          // Poll recent attempts since lastCheck, scoped to the user's mandates
           const newAttempts = await db.query.purchaseAttempts.findMany({
-            where: (attempts, { gt }) => gt(attempts.createdAt, lastCheck),
+            where: (attempts, { and, gt }) =>
+              and(gt(attempts.createdAt, lastCheck), inArray(attempts.mandateId, mandateIds)),
             orderBy: [desc(purchaseAttempts.createdAt)],
             limit: 10,
           });
 
-          // Poll recent transactions since lastCheck
+          // Poll recent transactions since lastCheck, scoped to the user's mandates
           const newTx = await db.query.transactions.findMany({
-            where: (tx, { gt }) => gt(tx.createdAt, lastCheck),
+            where: (tx, { and, gt }) =>
+              and(gt(tx.createdAt, lastCheck), inArray(tx.mandateId, mandateIds)),
             orderBy: [desc(transactions.createdAt)],
             limit: 10,
           });

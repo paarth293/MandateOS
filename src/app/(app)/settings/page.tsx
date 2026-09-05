@@ -1,6 +1,7 @@
-import { AlertOctagon, Settings, User } from "lucide-react";
+import { Settings, User } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/server/auth";
+import DangerZone from "./DangerZone";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function SettingsPage() {
             Settings
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your profile, platform defaults, and danger zone actions.
+            Manage your profile and the destructive operations scoped to your account.
           </p>
         </div>
       </div>
@@ -62,42 +63,7 @@ export default async function SettingsPage() {
 
         {/* Danger Zone */}
         <div className="col-span-1 space-y-6">
-          <div className="rounded-xl border border-rose-200 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-rose-200 bg-rose-50/50 px-6 py-4">
-              <h2 className="text-base font-semibold text-rose-800 flex items-center gap-2">
-                <AlertOctagon className="h-5 w-5 text-rose-600" />
-                Danger Zone
-              </h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-slate-900">Revoke All Mandates</h3>
-                <p className="text-xs text-slate-500 mt-1 mb-3">
-                  Immediately revokes all active agent policies across the platform.
-                </p>
-                <button
-                  type="button"
-                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition w-full"
-                  disabled
-                >
-                  Revoke All Mandates
-                </button>
-              </div>
-              <div className="pt-4 border-t border-slate-100">
-                <h3 className="text-sm font-medium text-slate-900">Force Audit Anchor</h3>
-                <p className="text-xs text-slate-500 mt-1 mb-3">
-                  Manually trigger a cryptographic anchor publish for all chains.
-                </p>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition w-full"
-                  disabled
-                >
-                  Publish Anchor Now
-                </button>
-              </div>
-            </div>
-          </div>
+          <DangerZone canManage={user.role !== "VIEWER"} />
         </div>
       </div>
     </div>
