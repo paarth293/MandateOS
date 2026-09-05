@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mandateos-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgres://mandate:mandate_secret@postgres:5432/mandateos
+      - RAZORPAY_KEY_ID=rzp_test_mock
+      - RAZORPAY_KEY_SECRET=rzp_secret_mock
+      - RAZORPAY_WEBHOOK_SECRET=webhook_secret_mock
+      - ADMIN_TOKEN=mandateos_secure_admin_token
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mandateos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: mandate
+      POSTGRES_PASSWORD: mandate_secret
+      POSTGRES_DB: mandateos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mandate -d mandateos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  inngest:
+    image: inngest/inngest:latest
+    container_name: mandateos-inngest
+    restart: unless-stopped
+    ports:
+      - "8288:8288"
+    command: inngest-cli dev -u http://app:3000/api/inngest --host 0.0.0.0
+    depends_on:
+      - app
+
+volumes:
+  postgres_data:
+    driver: local
