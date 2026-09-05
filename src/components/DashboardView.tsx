@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus, ShieldCheck } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Plus, Radio, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import AuditTrail from "@/components/AuditTrail";
 import ChaosConsole from "@/components/ChaosConsole";
 import BudgetBars, { type AgentMetric } from "@/components/dashboard/BudgetBars";
@@ -53,16 +54,53 @@ async function fetchAnalyticsData(): Promise<AnalyticsData> {
 }
 
 export default function DashboardView({ user }: DashboardViewProps) {
+  const queryClient = useQueryClient();
+  const [live, setLive] = useState(false);
+
+  // Real-time mode: the /api/events/stream SSE channel (same one the Battle
+  // Arena uses) signals every purchase attempt / transaction change, which
+  // triggers a debounced refetch of both queries — so budgets, KPIs, and
+  // feeds update the moment a verdict lands instead of on a fixed poll.
+  // The slow poll interval remains purely as a fallback if SSE drops.
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      }, 500);
+    };
+
+    try {
+      eventSource = new EventSource("/api/events/stream");
+      eventSource.onopen = () => setLive(true);
+      eventSource.addEventListener("attempt", scheduleRefresh);
+      eventSource.addEventListener("transaction", scheduleRefresh);
+      // EventSource auto-reconnects; onopen flips us back to LIVE.
+      eventSource.onerror = () => setLive(false);
+    } catch {
+      setLive(false);
+    }
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (eventSource) eventSource.close();
+    };
+  }, [queryClient]);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboardData,
-    refetchInterval: 2000,
+    refetchInterval: 30_000,
   });
 
   const { data: analyticsData } = useQuery({
     queryKey: ["analytics"],
     queryFn: fetchAnalyticsData,
-    refetchInterval: 3000,
+    refetchInterval: 30_000,
   });
 
   if (isLoading) {
@@ -89,9 +127,24 @@ export default function DashboardView({ user }: DashboardViewProps) {
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Agent Financial Command Center
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              Agent Financial Command Center
+            </h1>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-mono font-semibold border ${
+                live
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+              }`}
+              title="Live policy-firewall event stream"
+            >
+              <Radio
+                className={`h-3 w-3 ${live ? "animate-pulse text-emerald-500" : "text-amber-500"}`}
+              />
+              {live ? "LIVE STREAM" : "RECONNECTING..."}
+            </span>
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Cryptographically bounded policy firewall & recovery operations for autonomous AI.
           </p>
