@@ -1,122 +1,41 @@
-# Razorpay Agent Commerce: Strategic Business Case & Monetization Model
+# MandateOS — Business Case & Monetization Model
 
-> **Executive Thesis:** Autonomous AI agents are transitioning from conversational assistants to economic actors executing real-world commercial transactions. However, enterprises cannot grant non-deterministic LLMs access to corporate cards or unrestricted bank accounts. **MandateOS transforms Razorpay into the world's first cryptographically secured payment gateway for autonomous AI commerce.**
+> **Note on methodology:** the figures below are an illustrative, bottom-up estimate built on publicly reported Razorpay scale metrics, with every assumption stated explicitly. They're meant to show the shape of the opportunity and the reasoning behind it — not to be read as audited market research.
 
----
+## 1. The Anchor Numbers
 
-## 1. Market Context & The AI Commerce Shift
+Razorpay processes roughly **$180B in annualized total payment volume (TPV)** today and has publicly targeted **~$400B in TPV by 2030**, alongside a reported valuation near **$9.2B**. That's the ecosystem MandateOS sits inside — every merchant, subscription, and payout flow already running through Razorpay's rails is a candidate for agent-initiated commerce the moment an enterprise decides to let an AI agent transact on its behalf.
 
-By 2027, Gartner projects that over **15% of all daily enterprise procurement decisions will be autonomously executed by AI agents**. 
+## 2. Why Agent-Initiated Volume Is Coming
 
-Traditional payment rails rely on human-in-the-loop authentication (OTP via SMS, 3D-Secure biometric challenges, physical card swipes). This human-centric paradigm breaks down in autonomous systems:
-- An AI auto-scaling cloud servers at 3:00 AM cannot wait for an OTP.
-- An AI negotiating spot prices on logistics contracts cannot ask the CFO to approve every ₹2,000 transaction.
-- Giving an agent a static API key or corporate credit card creates catastrophic vulnerability to prompt injection, supply chain attacks, and hallucinations.
+Every major card network shipped its own answer to agentic payments in 2026 — Google's AP2 (Agent Payments Protocol), Visa's Trusted Agent Protocol, and Mastercard's Agent Pay. That's three independent, well-capitalized bets that agent-initiated transactions are about to become a real volume category, not a novelty. None of them, however, ship the enforcement layer that answers "once this agent is authorized, exactly what is it allowed to do, and how do we prove it never did more" — which is the gap MandateOS is built to fill, and the reason it's deliberately protocol-agnostic rather than a competitor to any of the three.
 
-**MandateOS bridges this gap:** It establishes a zero-trust financial perimeter using asymmetric Ed25519 digital signatures, real-time deterministic policy evaluation, sliding-window rate limits, and tamper-evident SHA-256 hash chains.
+## 3. Illustrative Bottom-Up TAM
 
----
+| Step | Assumption | Result |
+| :--- | :--- | :--- |
+| Razorpay annualized TPV (reported) | — | **$180B** |
+| Share flowing through enterprise / API-integrated merchants (vs. long-tail small business) | ~35% (illustrative) | **$63B** |
+| Share of that plausibly delegated to autonomous agents by 2028 (procurement bots, infra auto-scalers, subscription/renewal agents) | 3–8% (illustrative range) | **$1.9B – $5.0B** |
+| MandateOS take rate on agent-mandated volume | 3–5 bps (see §4) | **$0.6M – $2.5M ARR at the low end of the range, scaling with adoption** |
 
-## 2. Four High-Impact Enterprise Use Cases for Razorpay
+The wide range is intentional — this is a category that doesn't exist yet at scale, and the honest answer is "the ceiling is a meaningful fraction of enterprise payment volume, and the floor depends entirely on how fast agent-initiated commerce is actually adopted." The point of the model isn't the exact number; it's that even a conservative slice of an already-large, already-growing payment network is a venture-scale opportunity.
 
-### Use Case 1: Corporate Spend & Invoice Procurement AI
-- **The Problem:** A mid-market company (₹100 Cr+ GMV) processes 800+ vendor invoices monthly. Manual CFO review creates a 5-day invoice backlog, while granting AI payment credentials risks runaway hallucinations.
-- **The MandateOS Solution:** The company provisions a procurement mandate:
-  - Max per-transaction: ₹25,000
-  - Daily UTC cap: ₹2,00,000
-  - Whitelisted merchant categories: `Cloud Infrastructure`, `Office Supplies`, `SaaS Subscriptions`
-  - Required signature: Ed25519 keypair loaded inside the agent's secure enclave
-- **Impact & ROI:**
-  - Invoice cycle time reduced by **88%** (from 5 days to 12 minutes).
-  - Fraud/hallucination financial loss: **Zero** (mathematically bounded by deterministic integer rules).
-  - Complete cryptographic audit trail exported directly to enterprise ERPs (SAP/NetSuite).
+## 4. Monetization Model
 
----
+- **Primary: basis-point fee on mandate-authorized volume (3–5 bps).** Charged on top of Razorpay's existing processing fee, priced as "the cost of provable safety" rather than competing on payment processing margin. This mirrors how fraud-scoring and risk products are typically priced in payments — as a spread on volume, not a per-seat SaaS fee, because the value scales with the money at risk, not with headcount.
+- **Secondary: per-mandate platform fee** for enterprises that want unlimited transaction volume under a fixed monthly cost per active agent mandate — useful for large, predictable internal automation (e.g., a cloud cost-optimization agent making thousands of small daily purchases) where bps pricing would be disproportionate to risk.
+- **Tertiary: compliance & audit export tier.** Signed, independently verifiable audit exports (`/api/export/chain`) are the artifact a compliance or audit team actually needs for SOC2 / internal audit purposes — a natural upsell for regulated enterprises (fintech, healthcare procurement, public sector) where audit tooling is budgeted separately from payments infrastructure.
 
-### Use Case 2: SaaS Marketplace AI Procurement Assistant
-- **The Problem:** Product and engineering teams spend unmonitored budgets on SaaS micro-subscriptions (APIs, developer tooling, monitoring credits), leading to massive subscription sprawl and surprise month-end invoices.
-- **The MandateOS Solution:** Individual engineering teams deploy AutoGPT procurement agents bounded by micro-mandates:
-  - Max single swipe: ₹5,000
-  - Category restricted exclusively to `Software & Cloud Services`
-  - Silent retries: Max 2 with exponential backoff on transient bank timeouts
-- **Impact & ROI:**
-  - Instant tool access for developers with zero approval bottlenecks.
-  - CFO guarantees absolute budget predictability.
+## 5. Why Razorpay Specifically
+
+MandateOS is deliberately **not** a standalone payment processor — it's a policy and cryptographic-enforcement layer that sits in front of Razorpay's existing Orders API and webhook infrastructure (see [ADR-003](./ADR/ADR-003-inngest-durability.md) and the architecture diagram in the [README](../README.md)). That means zero migration cost for a merchant already on Razorpay: MandateOS is additive infrastructure, not a replacement decision. For Razorpay itself, it's a differentiator against processors with no answer yet to "can I safely let an AI agent use this" — a question every enterprise payments buyer is starting to ask in 2026.
+
+## 6. Go-to-Market Sequencing
+
+1. **Design partners** — 3–5 companies already running AI agents with *some* spending authority today (cloud cost-optimization bots, procurement agents, subscription-renewal automation) who currently rely on hard-coded spend ceilings or manual approval queues.
+2. **Razorpay ecosystem integration** — ship as a Razorpay-native add-on so it's a checkbox during onboarding, not a separate vendor evaluation.
+3. **Compliance-led expansion** — once a design partner has audit-exportable proof of zero unauthorized spend over a quarter, that becomes the case study that sells the next five.
 
 ---
-
-### Use Case 3: B2B Supply Chain & Automated Vendor Reconciliation
-- **The Problem:** Logistics and manufacturing firms face supplier friction when delivery milestones are achieved but milestone payments are held up in batch finance approvals.
-- **The MandateOS Solution:** ERP automation bots trigger payments through Razorpay rails as soon as IoT sensor logs verify warehouse delivery. The agent signs the payment request with a deterministic nonce and timestamp.
-- **Impact & ROI:**
-  - Payment velocity increases from Net-30 to **Instant-on-Delivery**.
-  - Supplier retention and volume discounts improve by **4–7%**.
-
----
-
-### Use Case 4: Razorpay Affiliate & Partner Automated Commission Payouts
-- **The Problem:** Razorpay's extensive partner and affiliate network requires dynamic commission disbursements based on real-time referral conversions. Batch scripts can over-disburse if race conditions occur across parallel workers.
-- **The MandateOS Solution:** Razorpay equips internal disbursement agents with cryptographic mandates. Each payout requires nonce registration in the database replay shield, eliminating double-spending across serverless workers.
-- **Impact & ROI:**
-  - 100% automated payouts with zero manual finance overhead.
-  - Provably eliminates duplicate disbursements via database-enforced unique nonces.
-
----
-
-## 3. Total Addressable Market (TAM) & Opportunity Size
-
-```
-┌────────────────────────────────────────────────────────┐
-│ GLOBAL AGENTIC COMMERCE TAM (2028 Projected)            │
-│ ₹4,20,000 Cr ($50 Billion) Global Autonomous Spend     │
-├────────────────────────────────────────────────────────┤
-│ INDIA B2B & ENTERPRISE FINTECH SAM                     │
-│ ₹45,000 Cr ($5.4 Billion) Agent-Secured Transactions    │
-├────────────────────────────────────────────────────────┤
-│ RAZORPAY SERVICEABLE MARKET (SOM - 10% Adoption)       │
-│ ₹4,500 Cr Annual Gross Merchandise Value (GMV)          │
-└────────────────────────────────────────────────────────┘
-```
-
-If Razorpay captures 10% of India's autonomous B2B agent spend within 3 years, MandateOS secures over **₹4,500 Cr** in annualized transaction volume.
-
----
-
-## 4. Monetization & Unit Economics for Razorpay
-
-Razorpay can monetize MandateOS through three synergistic revenue streams:
-
-### 1. Security Infrastructure Surcharge (Take-Rate Expansion)
-- Traditional payment gateway take-rate: ~1.8% to 2.0%.
-- **Agent Commerce Take-Rate:** Razorpay charges an additional **3 to 5 basis points (0.03%–0.05%)** for transactions evaluated, signed, rate-limited, and insured by the MandateOS policy firewall.
-- *On ₹4,500 Cr GMV, a 5 bps fee yields **₹2.25 Cr** in high-margin pure software revenue.*
-
-### 2. Enterprise Policy Engine Subscription (SaaS Tier)
-- **Free Tier:** 1 active mandate, up to 500 txs/month, standard 60 req/min rate limit.
-- **Enterprise Tier (₹49,000/month):**
-  - Unlimited mandates with multi-tenancy access control (OWNER / VIEWER).
-  - External Merkle anchor checkpointing for auditor transparency.
-  - Dedicated Inngest durable recovery workers with customizable SLA.
-  - Custom ML-assisted anomaly detection for category drift.
-
-### 3. Reduced Fraud Liability & Chargeback Elimination
-- Mathematical non-repudiation: Because every transaction carries a detached Ed25519 signature over canonical JSON, merchants and agents cannot dispute authorized purchases.
-- Eliminates "friendly fraud" and chargeback dispute operations.
-
----
-
-## 5. First-Mover Strategic Moat
-
-| Feature | Razorpay + MandateOS | Stripe / Adyen | Traditional Corporate Cards (Ramp / Brex) |
-| :--- | :--- | :--- | :--- |
-| **Authentication Type** | Asymmetric Ed25519 Digital Signature | API Key / Session Token | Static 16-Digit PAN + CVV |
-| **Prompt Injection Defense** | **Mathematical Firewall (Deterministic)** | Probabilistic LLM Prompts | None (Card can be drained) |
-| **Replay Attack Defense** | DB-Enforced Nonce Uniqueness | Idempotency Key Header | None |
-| **Audit Verification** | SHA-256 Tamper-Evident Hash Chain | Standard DB Logs | Bank Statement (Monthly) |
-| **Gateway Resilience** | Autonomous Inngest Retries + Circuit Breaker | Basic HTTP Retries | Decline / Manual Retry |
-
----
-
-## 6. Summary: Why Razorpay Must Own This Rail
-
-Competitors like Stripe and Square are actively exploring agentic payments. By integrating MandateOS directly into Razorpay's core API suite, Razorpay becomes the **de facto standard for autonomous financial transactions across Asia-Pacific**.
+*Sources for the anchor figures: [Razorpay 10-year TPV targets](https://www.business-standard.com/companies/news/razorpay-marks-10-years-targets-about-400-billion-in-tpv-by-2030-125020900388_1.html), [Razorpay $180B TPV / business overview](https://digitalinasia.com/razorpay-explained/), [Razorpay valuation](https://valueforstartups.in/02-razorpay). Agent-payment protocol context: Google AP2, Visa Trusted Agent Protocol, Mastercard Agent Pay (all launched 2026).*

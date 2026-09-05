@@ -346,7 +346,7 @@ export default function TrustPage() {
           <button
             type="button"
             onClick={handleVerify}
-            className="rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition-colors"
+            className="rounded-lg bg-slate-800 hover:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 transition-colors"
           >
             Verify Integrity
           </button>
@@ -405,7 +405,7 @@ export default function TrustPage() {
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-[#0D1424] p-5 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <LinkIcon className="h-4 w-4 text-blue-400" />
+              <LinkIcon className="h-4 w-4 text-indigo-400" />
               Cryptographic Anchor Chain Sequence
             </h2>
             <span className="text-xs font-mono text-slate-500">
@@ -422,7 +422,7 @@ export default function TrustPage() {
             <div className="py-20 text-center text-xs text-slate-500 font-mono">
               No anchors published yet for this mandate.
               <br />
-              <span className="text-slate-600 mt-1 inline-block">
+              <span className="text-slate-300 mt-1 inline-block">
                 Click &ldquo;Publish State Anchor Now&rdquo; above to commit the current audit head
                 hash.
               </span>
@@ -456,7 +456,7 @@ export default function TrustPage() {
                           {isHead ? "HEAD ANCHOR" : `STATE ANCHOR #${anchorsList.length - index}`}
                         </span>
                         {isGenesis && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/60">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
                             GENESIS
                           </span>
                         )}
@@ -572,7 +572,7 @@ export default function TrustPage() {
               type="button"
               onClick={handleSimulatePolicy}
               disabled={isSimulating || !selectedMandateId}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-2.5 text-xs font-semibold text-white transition-colors"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-500 disabled:opacity-50 py-2.5 text-xs font-semibold text-white transition-colors"
             >
               {isSimulating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

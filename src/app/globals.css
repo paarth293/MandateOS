@@ -1,31 +1,155 @@
-/* src/app/globals.css */
+/* src/app/globals.css
+ * MandateOS "Dark Ops" design system — a single, confident dark theme built
+ * for a cryptographic security console. No light/dark toggle: the product is
+ * a firewall command center, and it should always look like one.
+ */
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #f8fafc;
-  --bg-card: #ffffff;
-  --border-card: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-}
-
-.dark {
-  --bg-primary: #070b14;
-  --bg-card: #0d1424;
-  --border-card: #1e293b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --mos-bg: #05070d;
+  --mos-bg-elevated: #0a0f1c;
+  --mos-surface: #0d1424;
+  --mos-border: rgba(255, 255, 255, 0.08);
+  --mos-border-strong: rgba(255, 255, 255, 0.14);
+  --mos-glow-indigo: rgba(99, 102, 241, 0.35);
+  --mos-glow-emerald: rgba(16, 185, 129, 0.3);
+  --mos-glow-rose: rgba(244, 63, 94, 0.3);
 }
 
 @layer base {
-  body {
-    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-200;
+  * {
+    border-color: var(--mos-border);
   }
 
-  .dark body {
-    background-color: #070b14;
-    color: #f8fafc;
+  html {
+    color-scheme: dark;
   }
+
+  body {
+    @apply text-slate-100 antialiased;
+    background-color: var(--mos-bg);
+    background-image:
+      radial-gradient(ellipse 1200px 600px at 15% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 0%, rgba(16, 185, 129, 0.08), transparent 55%),
+      linear-gradient(to bottom, #05070d, #05070d);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+    color: #fff;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Shared component primitives                                            */
+/* ---------------------------------------------------------------------- */
+@layer components {
+  /* Standard glass card surface used across every console screen. */
+  .mos-card {
+    @apply relative rounded-2xl border bg-clip-padding;
+    border-color: var(--mos-border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+      0 20px 50px -20px rgba(0, 0, 0, 0.65);
+  }
+
+  /* Faint animated grid, meant as a section backdrop behind hero content. */
+  .mos-grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* Gradient brand wordmark. */
+  .mos-brand-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(120deg, #a5b4fc 0%, #818cf8 35%, #34d399 100%);
+  }
+
+  /* Monospace treatment for hashes, nonces, signatures, keys. */
+  .mos-mono {
+    @apply font-mono tracking-tight;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Animations                                                              */
+/* ---------------------------------------------------------------------- */
+@keyframes mos-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+.mos-live-dot {
+  animation: mos-pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes mos-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+.mos-scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(129, 140, 248, 0.12) 45%,
+    rgba(129, 140, 248, 0.24) 50%,
+    rgba(129, 140, 248, 0.12) 55%,
+    transparent 100%
+  );
+  animation: mos-scan 1.4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes mos-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mos-fade-up {
+  animation: mos-fade-up 0.35s ease-out both;
+}
+
+@keyframes mos-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.mos-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: mos-shimmer 1.6s linear infinite;
 }
 
 /* Custom scrollbars for high-density operations logs */
@@ -37,9 +161,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

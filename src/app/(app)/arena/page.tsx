@@ -102,13 +102,13 @@ export default function ArenaPage() {
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-blue-950/80 border border-blue-600/30 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-950/50">
+          <div className="h-10 w-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-lg shadow-indigo-950/50">
             <Swords className="h-6 w-6" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               Security Battle Arena
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-950 px-2.5 py-0.5 text-xs font-medium text-blue-400 border border-blue-800/60">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-xs font-medium text-indigo-400 border border-indigo-500/30">
                 <Radio
                   className={`h-3 w-3 ${connected ? "text-emerald-400 animate-pulse" : "text-slate-500"}`}
                 />
@@ -168,8 +168,8 @@ export default function ArenaPage() {
                     own mandates.
                   </span>
                 ) : (
-                  <span className="text-slate-600 mt-1 inline-block">
-                    Run <code className="text-blue-400">npm run agent:simulate</code> in your
+                  <span className="text-slate-300 mt-1 inline-block">
+                    Run <code className="text-indigo-400">npm run agent:simulate</code> in your
                     terminal to trigger live attacks.
                   </span>
                 )}
@@ -230,7 +230,7 @@ export default function ArenaPage() {
           {/* Gateway Circuit Breaker */}
           <div className="rounded-xl border border-slate-800 bg-[#0D1424] p-5 shadow-xl">
             <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 mb-3">
-              <Zap className="h-4 w-4 text-yellow-500" />
+              <Zap className="h-4 w-4 text-amber-400" />
               Gateway Circuit Breaker
             </h3>
             <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
@@ -266,7 +266,7 @@ export default function ArenaPage() {
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
                 <span className="text-slate-400">Replay Shield</span>
-                <span className="font-mono text-blue-400 font-semibold">DB Unique Nonce</span>
+                <span className="font-mono text-indigo-400 font-semibold">DB Unique Nonce</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
                 <span className="text-slate-400">Max Clock Drift</span>

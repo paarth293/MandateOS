@@ -21,25 +21,28 @@ export default function TransactionList({ transactions }: TransactionListProps) 
   const getStatusDisplay = (status: string) => {
     switch (status) {
       case "SUCCESS":
-        return { color: "text-green-700 bg-green-50 ring-green-600/20", icon: CheckCircle2 };
+        return {
+          color: "text-emerald-300 bg-emerald-500/10 ring-emerald-500/20",
+          icon: CheckCircle2,
+        };
       case "ORDER_CREATED":
-        return { color: "text-amber-700 bg-amber-50 ring-amber-600/20", icon: Clock };
+        return { color: "text-amber-300 bg-amber-500/10 ring-amber-500/20", icon: Clock };
       case "FAILED":
-        return { color: "text-red-700 bg-red-50 ring-red-600/10", icon: XCircle };
+        return { color: "text-rose-300 bg-rose-500/10 ring-rose-500/20", icon: XCircle };
       case "RECOVERED":
-        return { color: "text-blue-700 bg-blue-50 ring-blue-600/20", icon: RefreshCcw };
+        return { color: "text-indigo-300 bg-indigo-500/10 ring-indigo-500/20", icon: RefreshCcw };
       default:
-        return { color: "text-slate-700 bg-slate-50 ring-slate-600/20", icon: ArrowUpRight };
+        return { color: "text-slate-300 bg-white/[0.05] ring-white/10", icon: ArrowUpRight };
     }
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-slate-200 bg-slate-50/50 px-6 py-4">
-        <h3 className="font-semibold text-slate-900">Recent Agent Transactions</h3>
+    <div className="mos-card overflow-hidden">
+      <div className="border-b border-white/10 bg-white/[0.02] px-6 py-4">
+        <h3 className="font-semibold text-white">Recent Agent Transactions</h3>
       </div>
 
-      <ul className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+      <ul className="divide-y divide-white/[0.06] max-h-[500px] overflow-y-auto">
         {transactions.length === 0 ? (
           <li className="px-6 py-8 text-center text-sm text-slate-500">
             No transactions found for this agent yet.
@@ -66,10 +69,10 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
+                  className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.03] transition-colors"
                 >
                   <div className="flex flex-col">
-                    <span className="font-mono text-sm font-medium text-slate-900">
+                    <span className="font-mono text-sm font-medium text-slate-200">
                       {tx.id.substring(0, 14)}...
                     </span>
                     <span className="text-xs text-slate-500 mt-1">
@@ -78,7 +81,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                   </div>
 
                   <div className="flex items-center space-x-4">
-                    <span className="font-semibold text-slate-900">{formattedAmount}</span>
+                    <span className="font-semibold text-white">{formattedAmount}</span>
 
                     <motion.span
                       key={tx.status}

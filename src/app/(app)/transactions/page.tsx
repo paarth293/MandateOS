@@ -33,24 +33,30 @@ export default async function TransactionsPage() {
   const getStatusDisplay = (status: string) => {
     switch (status) {
       case "SUCCESS":
-        return { color: "text-green-700 bg-green-50 ring-green-600/20", icon: CheckCircle2 };
+        return {
+          color: "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20",
+          icon: CheckCircle2,
+        };
       case "ORDER_CREATED":
-        return { color: "text-amber-700 bg-amber-50 ring-amber-600/20", icon: Clock };
+        return { color: "text-amber-400 bg-amber-500/10 ring-amber-600/20", icon: Clock };
       case "FAILED":
-        return { color: "text-red-700 bg-red-50 ring-red-600/10", icon: XCircle };
+        return { color: "text-rose-400 bg-rose-500/10 ring-rose-500/10", icon: XCircle };
       case "RECOVERED":
-        return { color: "text-blue-700 bg-blue-50 ring-blue-600/20", icon: RefreshCcw };
+        return { color: "text-indigo-300 bg-indigo-500/10 ring-indigo-500/20", icon: RefreshCcw };
       default:
-        return { color: "text-slate-700 bg-slate-50 ring-slate-600/20", icon: ArrowUpRight };
+        return {
+          color: "text-slate-200 bg-slate-900/60/[0.03] ring-slate-600/20",
+          icon: ArrowUpRight,
+        };
     }
   };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Receipt className="h-7 w-7 text-blue-600" />
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Receipt className="h-7 w-7 text-indigo-400" />
             Transactions Ledger
           </h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -59,10 +65,10 @@ export default async function TransactionsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-slate-900/60 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
+          <table className="min-w-full divide-y divide-white/10">
+            <thead className="bg-slate-900/60/[0.03]">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Transaction
@@ -81,7 +87,7 @@ export default async function TransactionsPage() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
+            <tbody className="bg-slate-900/60 divide-y divide-white/10">
               {txsWithMandates.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500">
@@ -100,22 +106,22 @@ export default async function TransactionsPage() {
                   });
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={tx.id} className="hover:bg-slate-900/60/[0.03] transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="font-mono text-sm font-medium text-slate-900">
+                          <span className="font-mono text-sm font-medium text-white">
                             {tx.id.substring(0, 8)}...
                           </span>
                           <span className="text-xs text-slate-500">{date}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-900">
+                        <span className="text-sm font-medium text-white">
                           {mandate?.agentName || "Unknown"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900">
+                        <span className="font-semibold text-white">
                           {formatCurrency(tx.amount)}
                         </span>
                       </td>
@@ -131,7 +137,7 @@ export default async function TransactionsPage() {
                         <div className="flex flex-col">
                           {tx.failureReason ? (
                             <span
-                              className="text-xs text-red-600 max-w-[200px] truncate"
+                              className="text-xs text-rose-400 max-w-[200px] truncate"
                               title={tx.failureReason}
                             >
                               {tx.failureReason}

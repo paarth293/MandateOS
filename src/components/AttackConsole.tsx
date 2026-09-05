@@ -88,8 +88,8 @@ const ATTACK_SCENARIOS: {
 export default function AttackConsole({ mandateId, agentName }: AttackConsoleProps) {
   const [selectedAttack, setSelectedAttack] =
     useState<AttackResult["attackKind"]>("FORGED_SIGNATURE");
-  const [amountInput, setAmountInput] = useState("");
-  const [categoryInput, setCategoryInput] = useState("");
+  const [amountInput, setAmountInput] = useState("999999.99");
+  const [categoryInput, setCategoryInput] = useState("Luxury Sports Cars");
   const [launching, setLaunching] = useState(false);
   const [result, setResult] = useState<AttackResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +128,18 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
         return { res, data };
       };
 
+      // The attack route deliberately mirrors the REAL purchase firewall's
+      // HTTP status codes: a successfully-blocked attack comes back as 401
+      // (invalid signature / stale timestamp), 403 (cap/category breach), or
+      // 409 (replay detected) — not 200. `fetch`'s `res.ok` is only true for
+      // 2xx, so treating "not ok" as a failure would (and did) misreport
+      // every one of those correct BLOCKED/REPLAY_DETECTED verdicts as a
+      // console error. A response is a genuine attack verdict whenever it
+      // carries a `verdict` field; only a response WITHOUT one (bad request,
+      // mandate not found, unhandled server error) is an actual failure.
+      const isVerdictResponse = (data: unknown): data is AttackResult =>
+        !!data && typeof data === "object" && "verdict" in data;
+
       if (selectedAttack === "REPLAY_NOMINAL") {
         // Simulate an eavesdropper: fire the SAME signed packet (same nonce)
         // twice. The first call is the legitimate authorized purchase; the
@@ -143,9 +155,9 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
           );
           return;
         }
-        if (!first.res.ok) {
+        if (!isVerdictResponse(first.data)) {
           throw new Error(
-            (first.data.error as string) || `Attack failed (HTTP ${first.res.status})`,
+            (first.data?.error as string) || `Attack failed (HTTP ${first.res.status})`,
           );
         }
 
@@ -153,9 +165,9 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
         await new Promise((r) => setTimeout(r, 500));
 
         const replay = await fireAttack(nonce);
-        if (!replay.res.ok && replay.res.status !== 409) {
+        if (!isVerdictResponse(replay.data)) {
           throw new Error(
-            (replay.data.error as string) || `Attack failed (HTTP ${replay.res.status})`,
+            (replay.data?.error as string) || `Attack failed (HTTP ${replay.res.status})`,
           );
         }
 
@@ -166,10 +178,6 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
 
       const { res, data } = await fireAttack();
 
-      if (!res.ok && res.status !== 503) {
-        throw new Error((data.error as string) || `Attack failed (HTTP ${res.status})`);
-      }
-
       if (res.status === 503) {
         setError(
           "agent.key is required for this attack. Run `npm run seed` (writes agent.key " +
@@ -177,6 +185,10 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
         );
         setResult(null);
         return;
+      }
+
+      if (!isVerdictResponse(data)) {
+        throw new Error((data?.error as string) || `Attack failed (HTTP ${res.status})`);
       }
 
       setResult(data);
@@ -190,10 +202,10 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
 
   if (!mandateId) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-        <Crosshair className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-        <h3 className="text-base font-semibold text-slate-800">Attack Console</h3>
-        <p className="text-sm text-slate-500 mt-1">
+      <div className="mos-card border-dashed p-8 text-center">
+        <Crosshair className="mx-auto h-10 w-10 text-slate-600 mb-3" />
+        <h3 className="text-base font-semibold text-slate-200">Attack Console</h3>
+        <p className="text-sm text-slate-400 mt-1">
           No active mandate selected. Issue a mandate first (
           <strong>Mandates → Issue New Mandate</strong>) and the attack console will appear here
           with a live target.
@@ -206,25 +218,25 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
     switch (v) {
       case "ALLOWED":
         return {
-          bg: "bg-emerald-50 border-emerald-200 text-emerald-800",
+          bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
           icon: CheckCircle2,
           label: "ALLOWED",
         };
       case "BLOCKED":
         return {
-          bg: "bg-rose-50 border-rose-200 text-rose-800",
+          bg: "bg-rose-500/10 border-rose-500/30 text-rose-300",
           icon: XCircle,
           label: "BLOCKED",
         };
       case "REPLAY_DETECTED":
         return {
-          bg: "bg-amber-50 border-amber-200 text-amber-800",
+          bg: "bg-amber-500/10 border-amber-500/30 text-amber-300",
           icon: AlertTriangle,
           label: "REPLAY_DETECTED",
         };
       default:
         return {
-          bg: "bg-slate-50 border-slate-200 text-slate-800",
+          bg: "bg-white/[0.05] border-white/10 text-slate-300",
           icon: ShieldAlert,
           label: v,
         };
@@ -240,15 +252,15 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
     : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="mos-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-6 py-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <Crosshair className="h-4.5 w-4.5 text-rose-600" />
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Crosshair className="h-4.5 w-4.5 text-rose-400" />
             Attack Console — Try to Break It
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             Pick an attack above and launch it against the live mandate. Watch the firewall's
             verdict appear in real time.
           </p>
@@ -272,16 +284,16 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                 }}
                 className={`w-full text-left rounded-lg border px-4 py-3 text-sm transition-all ${
                   active
-                    ? "border-rose-300 bg-rose-50/60 ring-1 ring-rose-300"
-                    : "border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300"
+                    ? "border-rose-500/40 bg-rose-500/[0.08] ring-1 ring-rose-500/40"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="font-semibold text-slate-900">{scenario.label}</span>
-                    <p className="text-xs text-slate-500 mt-0.5">{scenario.description}</p>
+                    <span className="font-semibold text-white">{scenario.label}</span>
+                    <p className="text-xs text-slate-400 mt-0.5">{scenario.description}</p>
                   </div>
-                  {active && <div className="text-rose-600">▶</div>}
+                  {active && <div className="text-rose-400">▶</div>}
                 </div>
               </button>
             );
@@ -290,7 +302,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
 
         {/* Key requirement note */}
         {requiresKeyNote && (
-          <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-300">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{requiresKeyNote}</span>
           </div>
@@ -303,7 +315,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             <div className="flex-1 min-w-[180px]">
               <label
                 htmlFor="cap-breach-amount"
-                className="block text-xs font-semibold text-slate-600 mb-1"
+                className="block text-xs font-semibold text-slate-400 mb-1"
               >
                 Amount (₹) — will exceed cap
               </label>
@@ -312,8 +324,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                 type="number"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
-                defaultValue="999999.99"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-800 focus:border-rose-500 focus:outline-none"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-mono text-slate-200 focus:border-rose-500/50 focus:outline-none"
               />
             </div>
           )}
@@ -323,7 +334,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             <div className="flex-1 min-w-[180px]">
               <label
                 htmlFor="category-breach-category"
-                className="block text-xs font-semibold text-slate-600 mb-1"
+                className="block text-xs font-semibold text-slate-400 mb-1"
               >
                 Category — must not be whitelisted
               </label>
@@ -332,9 +343,8 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                 type="text"
                 value={categoryInput}
                 onChange={(e) => setCategoryInput(e.target.value)}
-                defaultValue="Luxury Sports Cars"
                 placeholder="e.g. Luxury Sports Cars"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-200 focus:border-rose-500/50 focus:outline-none"
               />
             </div>
           )}
@@ -343,7 +353,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             type="button"
             onClick={handleLaunch}
             disabled={launching}
-            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_0_16px_-4px_rgba(244,63,94,0.6)] transition-colors hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {launching ? (
               <>
@@ -359,13 +369,13 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
           </button>
 
           {selectedAttack === "REPLAY_NOMINAL" && (
-            <p className="text-xs text-rose-600 italic">
+            <p className="text-xs text-rose-400 italic">
               Fires the same signed packet twice automatically — the first call is the legitimate
               purchase, the second is the replay.
             </p>
           )}
           {selectedAttack === "REPLAY_FRAUD_OWNER" && (
-            <p className="text-xs text-rose-600 italic">
+            <p className="text-xs text-rose-400 italic">
               Reuses the nonce from this mandate's most recent ALLOWED purchase — run a legitimate
               purchase first (e.g. the SDK simulation) if none exists yet.
             </p>
@@ -374,7 +384,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
 
         {/* Error */}
         {error && (
-          <div className="mt-4 flex items-start gap-2 rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800">
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-300">
             <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -386,8 +396,8 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             <div
               className={`rounded-lg border p-5 space-y-3 transition-all ${
                 result.verdict === "ALLOWED"
-                  ? "bg-emerald-50/60 border-emerald-200"
-                  : "bg-rose-50/60 border-rose-200"
+                  ? "bg-emerald-500/[0.06] border-emerald-500/25"
+                  : "bg-rose-500/[0.06] border-rose-500/25"
               }`}
             >
               {/* Verdict badge */}
@@ -407,28 +417,28 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                   </span>
                   <span className="text-xs text-slate-500">HTTP {result.httpStatus}</span>
                 </div>
-                <span className="text-xs font-mono text-slate-400">Attack #{launchCount}</span>
+                <span className="text-xs font-mono text-slate-500">Attack #{launchCount}</span>
               </div>
 
               {/* Attack summary */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-slate-500">Attack type:</span>
-                  <span className="font-semibold text-slate-800 ml-1">{result.attackKind}</span>
+                  <span className="font-semibold text-slate-200 ml-1">{result.attackKind}</span>
                 </div>
                 <div>
                   <span className="text-slate-500">Category:</span>
-                  <span className="font-semibold text-slate-800 ml-1">{result.category}</span>
+                  <span className="font-semibold text-slate-200 ml-1">{result.category}</span>
                 </div>
                 <div>
                   <span className="text-slate-500">Amount:</span>
-                  <span className="font-semibold text-slate-800 ml-1">
+                  <span className="font-semibold text-slate-200 ml-1">
                     ₹{(result.amountPaise / 100).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-500">Nonce:</span>
-                  <span className="font-mono text-slate-700 ml-1 truncate max-w-[160px]">
+                  <span className="font-mono text-slate-300 ml-1 truncate max-w-[160px]">
                     {result.nonce}
                   </span>
                 </div>
@@ -436,7 +446,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                   <span className="text-slate-500">Signature:</span>
                   <span
                     className={`font-mono ml-1 ${
-                      result.verdict === "ALLOWED" ? "text-emerald-700" : "text-rose-700"
+                      result.verdict === "ALLOWED" ? "text-emerald-300" : "text-rose-300"
                     }`}
                   >
                     {result.signature}
@@ -444,7 +454,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
                 </div>
                 <div>
                   <span className="text-slate-500">Sig kind:</span>
-                  <span className="text-slate-700 ml-1">{result.signatureDescription}</span>
+                  <span className="text-slate-300 ml-1">{result.signatureDescription}</span>
                 </div>
               </div>
 
@@ -452,18 +462,18 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
               <div
                 className={`rounded-lg p-3 text-xs ${
                   result.verdict === "ALLOWED"
-                    ? "bg-white/60 border border-emerald-200"
-                    : "bg-white/60 border border-rose-200"
+                    ? "bg-white/[0.03] border border-emerald-500/20"
+                    : "bg-white/[0.03] border border-rose-500/20"
                 }`}
               >
-                <p className="font-semibold text-slate-800 mb-1">Verdict</p>
-                <p className="text-slate-700 leading-relaxed">{result.reason}</p>
+                <p className="font-semibold text-slate-200 mb-1">Verdict</p>
+                <p className="text-slate-300 leading-relaxed">{result.reason}</p>
                 {result.details && (
                   <details className="mt-2">
-                    <summary className="text-slate-500 cursor-pointer hover:text-slate-700">
+                    <summary className="text-slate-500 cursor-pointer hover:text-slate-300">
                       Policy detail
                     </summary>
-                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono text-slate-600">
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono text-slate-400">
                       <span>
                         Per-tx cap: ₹{(result.details.perTxCapPaise / 100).toLocaleString("en-IN")}
                       </span>
@@ -508,7 +518,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
         )}
 
         {/* 8-Layer Security Waterfall Inspector */}
-        <div className="mt-6 pt-6 border-t border-slate-200">
+        <div className="mt-6 pt-6 border-t border-white/10">
           <SecurityWaterfall
             verdict={result?.verdict ?? null}
             attackKind={result?.attackKind ?? (launching ? selectedAttack : null)}

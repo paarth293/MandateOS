@@ -1,48 +1,27 @@
-# ADR-001: Detached Ed25519 Signatures for Autonomous Agent Transactions
+# ADR-001: Ed25519 Detached Signatures for Every Agent Request
 
-## Status
-**Accepted** (2026-09)
+**Status:** Accepted
 
-## Context & Problem Statement
-Autonomous AI agents in enterprise and fintech ecosystems execute financial transactions via REST APIs. Because agent runtimes (LLMs, LangChain nodes, AutoGPT scripts) are inherently non-deterministic and susceptible to prompt injection, memory poisoning, or compromised sandbox execution environments, the central payment gateway cannot trust the agent's identity via shared secrets (such as API keys or HMAC symmetric secrets) or session cookies alone.
+## Context
 
-If an attacker intercepts or extracts a shared HMAC secret, they gain the ability to forge arbitrary transaction requests across the entire lifespan of the secret. Furthermore, symmetric keys do not provide non-repudiation: if a fraudulent dispute occurs between an enterprise tenant and the gateway, neither side can cryptographically prove whether the agent originated the payload or if the server forged it.
+An AI agent needs to prove, on every single purchase request, that the request genuinely came from it and hasn't been altered in transit — without MandateOS ever holding a secret that could impersonate the agent, and without paying the latency cost of a heavyweight signature scheme on every request in a policy path that has to stay under 5ms.
 
-## Decision Drivers
-1. **Asymmetric Proof & Non-Repudiation**: The agent signs with its private key; the gateway verifies against the stored public key. The private key never leaves the agent's secure enclave / memory space.
-2. **Speed & Minimal Compute Overhead**: Verification must occur in sub-millisecond time (<1ms) to keep the total policy evaluation overhead under 5ms.
-3. **Resilience to Side-Channel Attacks**: Signature verification must be constant-time and immune to branch prediction attacks.
-4. **Compact Payload Size**: Signatures should not bloat HTTP headers or webhook payloads.
+## Decision
 
-## Considered Options
-1. **HMAC-SHA256 (Symmetric)**:
-   - *Pros*: Extremely fast, simple implementation.
-   - *Cons*: Shared secret vulnerability. If the gateway DB is compromised, all agent signatures can be forged. No cryptographic non-repudiation between agent and merchant.
-2. **RSA-2048 / RSA-4096 (Asymmetric)**:
-   - *Pros*: Widely established standard.
-   - *Cons*: Large key and signature sizes (256–512 bytes), slow key generation and verification times (high CPU consumption under high concurrency).
-3. **ECDSA (secp256k1 or secp256r1)**:
-   - *Pros*: Industry standard in web3 and TLS.
-   - *Cons*: Requires a cryptographically secure random nonce ($k$) during signature generation; weak randomness leaks the private key entirely (e.g., Sony PS3 hack). More complex and prone to side-channel timing attacks if not strictly constant-time.
-4. **Ed25519 (EdDSA over Curve25519)**:
-   - *Pros*: High performance (sub-millisecond verification), 64-byte deterministic detached signatures, 32-byte public keys, collision-resistant, immune to timing side-channels, deterministic signing (no per-signature random number generation vulnerability).
-   - *Cons*: Slightly newer standard than RSA, but natively supported in Node.js `crypto` and modern web crypto APIs.
+Every mandate is issued as an **Ed25519 keypair** (via TweetNaCl). The agent retains the private key; MandateOS stores only the public key. Each purchase request is canonically serialized (`{ mandateId, amountPaise, category, nonce, timestamp }`, with deterministic key ordering — see `canonicalStringify` in `src/lib/crypto.ts`) and signed with a **detached** signature, verified against the mandate's public key before any other check runs (Gate 1 of the policy waterfall).
 
-## Decision Outcome
-We selected **Ed25519 Detached Signatures** (`ed25519` via standard Node.js `crypto.verify` / `@noble/curves`).
+Detached (rather than inline/attached) signatures mean the payload and the signature travel separately — the server verifies the exact bytes it received against the exact signature provided, with no ambiguity about what was actually signed.
 
-### Implementation Details:
-- Each Mandate stores the agent's public key (hex or base64 encoded).
-- The agent computes a deterministic canonical serialization of the transaction payload:
-  `canonicalPayload = `${mandateId}:${merchantId}:${amount}:${currency}:${nonce}:${timestamp}``
-- The agent signs this canonical string with its Ed25519 private key.
-- The HTTP request carries headers:
-  - `X-Mandate-Id`: UUID of the active mandate
-  - `X-Agent-Signature`: 64-byte Ed25519 detached signature
-  - `X-Agent-Nonce`: Unique UUID v4 or cryptographic nonce
-  - `X-Agent-Timestamp`: ISO 8601 epoch timestamp
-- Gate 1 of the MandateOS security waterfall decodes the public key, reconstructs the canonical message, and executes constant-time Ed25519 verification. Any byte alteration in the payload, nonce, or timestamp immediately triggers `ERR_SIG_INVALID` with rejection in <1.2ms.
+## Alternatives Considered
+
+- **HMAC with a shared secret.** Rejected — a shared secret must exist on both the agent and the server. A server-side breach or log leak exposes a value that can *forge* requests, not just read them. Ed25519 keeps the forging capability exclusively with the agent.
+- **RSA-2048 signatures.** Rejected on latency and size — RSA verification typically runs 1–2ms and produces ~256-byte signatures, versus Ed25519's measured **~0.8ms verification** (see `TEST_REPORT.md`, Suite 1) and 64-byte signatures. At a target of <5ms total policy latency, that gap matters.
+- **JWT (RS256) bearer tokens.** Rejected — JWTs are built for *session* authorization, not *per-transaction* integrity. Reusing one token across many purchases would reintroduce exactly the replay risk Gate 2 exists to close.
+- **Plain API keys.** Rejected outright — a static key has no per-request binding to the payload. Any request signed with it is as good as any other; there's no way to detect that a request's amount or category was altered after the fact.
 
 ## Consequences
-- **Positive**: Complete non-repudiation, zero risk of server-side secret leakage causing forgeability, tiny 64-byte signature overhead, deterministic verification.
-- **Negative**: Agent SDK must manage the private key securely (e.g., in environment variables, TPM, or AWS KMS).
+
+- **Key custody becomes the agent operator's responsibility.** Losing the private key means the mandate must be revoked and reissued — there is no "password reset" for a signing key, by design.
+- **Public key rotation requires a new mandate**, not an in-place update — this is intentional; a mandate is meant to be an immutable, auditable grant, not a mutable credential.
+- **Verification is fast enough to sit in the hot path** of every transaction: the 8-gate waterfall averages 3.2ms end-to-end with Ed25519 verification alone at ~0.8ms (`TEST_REPORT.md`).
+- **No party other than the agent can ever produce a valid signature**, including MandateOS itself — the system can *block* a transaction it disagrees with, but it can never forge one it likes.

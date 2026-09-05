@@ -55,13 +55,13 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
   };
 
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-sm">
-      <div className="flex items-center space-x-2 mb-4 text-red-700">
+    <div className="mos-card border-rose-500/20 bg-rose-500/[0.03] p-6">
+      <div className="flex items-center space-x-2 mb-4 text-rose-300">
         <AlertOctagon className="h-6 w-6" />
         <h2 className="text-lg font-bold">Chaos Console</h2>
       </div>
 
-      <p className="text-sm text-red-600 mb-6 leading-relaxed">
+      <p className="text-sm text-rose-300/80 mb-6 leading-relaxed">
         Warning: This is for demonstration purposes. Clicking this button simulates an AI Agent
         attempting a purchase, followed immediately by a catastrophic gateway failure.
       </p>
@@ -70,14 +70,14 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
         <div
           className={`mb-4 flex items-center gap-2 rounded-lg border p-3 text-xs font-medium ${
             injectResult.ok
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-rose-50 border-rose-200 text-rose-800"
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+              : "bg-rose-500/10 border-rose-500/20 text-rose-300"
           }`}
         >
           {injectResult.ok ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
           ) : (
-            <AlertOctagon className="h-4 w-4 shrink-0 text-rose-600" />
+            <AlertOctagon className="h-4 w-4 shrink-0 text-rose-400" />
           )}
           <span>{injectResult.message}</span>
         </div>
@@ -85,20 +85,26 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
 
       <div className="flex items-center space-x-4">
         <select
-          className="block w-48 rounded-md border-0 py-2 pl-3 pr-10 text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-red-600 sm:text-sm sm:leading-6"
+          className="block w-48 rounded-md border-0 bg-white/[0.04] py-2 pl-3 pr-10 text-slate-200 ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-rose-500 sm:text-sm sm:leading-6"
           value={failureType}
           onChange={(e) => setFailureType(e.target.value)}
         >
-          <option value="BANK_TIMEOUT">Bank Timeout (504)</option>
-          <option value="INSUFFICIENT_FUNDS">Insufficient Funds (402)</option>
-          <option value="CARD_EXPIRED">Card Expired (Quarantine)</option>
+          <option value="BANK_TIMEOUT" className="bg-[#0d1424] text-slate-200">
+            Bank Timeout (504)
+          </option>
+          <option value="INSUFFICIENT_FUNDS" className="bg-[#0d1424] text-slate-200">
+            Insufficient Funds (402)
+          </option>
+          <option value="CARD_EXPIRED" className="bg-[#0d1424] text-slate-200">
+            Card Expired (Quarantine)
+          </option>
         </select>
 
         <button
           type="button"
           onClick={handleInjectChaos}
           disabled={isInjecting}
-          className="inline-flex items-center rounded-md bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="inline-flex items-center rounded-md bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_16px_-4px_rgba(244,63,94,0.6)] hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {isInjecting ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

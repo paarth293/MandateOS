@@ -107,14 +107,14 @@ export default function DashboardView({ user }: DashboardViewProps) {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
       </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <div className="flex h-full items-center justify-center text-red-500">
+      <div className="flex h-full items-center justify-center text-rose-400">
         Error loading dashboard data. Make sure your database is running!
       </div>
     );
@@ -129,31 +129,29 @@ export default function DashboardView({ user }: DashboardViewProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            <h1 className="text-2xl font-bold tracking-tight text-white">
               Agent Financial Command Center
             </h1>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-mono font-semibold border ${
                 live
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
-                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                  ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-300 border-amber-500/20"
               }`}
               title="Live policy-firewall event stream"
             >
               <Radio
-                className={`h-3 w-3 ${live ? "animate-pulse text-emerald-500" : "text-amber-500"}`}
+                className={`h-3 w-3 ${live ? "animate-pulse text-emerald-400" : "text-amber-400"}`}
               />
               {live ? "LIVE STREAM" : "RECONNECTING..."}
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             Cryptographically bounded policy firewall & recovery operations for autonomous AI.
           </p>
         </div>
-        <div className="text-xs text-slate-400">
-          Operator:{" "}
-          <span className="font-semibold text-slate-700 dark:text-slate-200">{user.name}</span> (
-          {user.role})
+        <div className="text-xs text-slate-500">
+          Operator: <span className="font-semibold text-slate-300">{user.name}</span> ({user.role})
         </div>
       </div>
 
@@ -188,16 +186,12 @@ export default function DashboardView({ user }: DashboardViewProps) {
 
       {/* 6. Active Policies Summary */}
       <section>
-        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">
-          Provisioned Agent Policies
-        </h2>
+        <h2 className="text-lg font-bold text-white mb-4">Provisioned Agent Policies</h2>
         {data.mandates.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-10 text-center">
-            <ShieldCheck className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
-            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-              No agent policies yet
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+          <div className="mos-card border-dashed p-10 text-center">
+            <ShieldCheck className="mx-auto h-10 w-10 text-slate-600 mb-3" />
+            <h3 className="text-base font-semibold text-slate-200">No agent policies yet</h3>
+            <p className="text-sm text-slate-400 mt-1 max-w-md mx-auto">
               {user.role === "VIEWER"
                 ? "Your account has viewer access and owns no mandates. Ask an owner to grant access or share a mandate with you."
                 : "Issue your first cryptographically bound Ed25519 mandate to start authorizing agent spend."}
@@ -205,7 +199,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
             {user.role !== "VIEWER" && (
               <Link
                 href="/mandates"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition mt-5"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_16px_-4px_rgba(99,102,241,0.7)] hover:bg-indigo-400 transition mt-5"
               >
                 <Plus className="h-4 w-4" />
                 Issue New Mandate
@@ -224,16 +218,12 @@ export default function DashboardView({ user }: DashboardViewProps) {
       {/* 7. Event Stream & Cryptographic Audit Chain */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">
-            Live Transaction Feed
-          </h2>
+          <h2 className="text-lg font-bold text-white mb-4">Live Transaction Feed</h2>
           <TransactionList transactions={data.transactions} />
         </div>
 
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">
-            Cryptographic Audit Chain
-          </h2>
+          <h2 className="text-lg font-bold text-white mb-4">Cryptographic Audit Chain</h2>
           <AuditTrail logs={data.auditLogs} />
         </div>
       </section>

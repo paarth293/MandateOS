@@ -21,7 +21,7 @@ interface BudgetBarsProps {
 }
 
 function getProgressColor(percent: number | null): string {
-  if (percent === null) return "bg-slate-300";
+  if (percent === null) return "bg-slate-600";
   if (percent >= 90) return "bg-rose-500";
   if (percent >= 70) return "bg-amber-500";
   return "bg-emerald-500";
@@ -29,14 +29,14 @@ function getProgressColor(percent: number | null): string {
 
 export default function BudgetBars({ agents }: BudgetBarsProps) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+    <div className="mos-card p-6">
+      <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
         <div>
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Gauge className="h-5 w-5 text-emerald-600" />
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <Gauge className="h-5 w-5 text-emerald-400" />
             Agent Budget Utilization
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             Real-time daily and lifetime spend tracking against cryptographic mandate limits.
           </p>
         </div>
@@ -44,7 +44,7 @@ export default function BudgetBars({ agents }: BudgetBarsProps) {
 
       <div className="space-y-6">
         {(agents || []).length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-400">
+          <p className="py-8 text-center text-xs text-slate-500">
             No agent metrics currently available.
           </p>
         ) : (
@@ -55,23 +55,23 @@ export default function BudgetBars({ agents }: BudgetBarsProps) {
             return (
               <div
                 key={agent.mandateId}
-                className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 transition hover:bg-slate-50"
+                className="rounded-lg border border-white/10 bg-white/[0.02] p-4 transition hover:bg-white/[0.04]"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-semibold text-slate-900">{agent.agentName}</span>
+                    <Bot className="h-4 w-4 text-indigo-400" />
+                    <span className="text-sm font-semibold text-white">{agent.agentName}</span>
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                         agent.status === "ACTIVE"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-rose-50 text-rose-700 border border-rose-200"
+                          ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                          : "bg-rose-500/10 text-rose-300 border-rose-500/20"
                       }`}
                     >
                       {agent.status}
                     </span>
                   </div>
-                  <span className="text-xs font-mono text-slate-400">
+                  <span className="text-xs font-mono text-slate-500">
                     Max: {formatCurrency(agent.maxAmountPerTransaction)}/tx
                   </span>
                 </div>
@@ -81,14 +81,14 @@ export default function BudgetBars({ agents }: BudgetBarsProps) {
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-slate-500 font-medium">Daily Limit</span>
-                      <span className="font-semibold text-slate-800">
+                      <span className="font-semibold text-slate-300">
                         {formatCurrency(agent.spentTodayPaise)} /{" "}
                         {agent.dailyLimitPaise ? formatCurrency(agent.dailyLimitPaise) : "Uncapped"}
                         {agent.dailyUtilizationPercent !== null &&
                           ` (${agent.dailyUtilizationPercent}%)`}
                       </span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
                       <div
                         className={`h-full transition-all duration-500 ${dailyColor}`}
                         style={{ width: `${agent.dailyUtilizationPercent ?? 0}%` }}
@@ -100,7 +100,7 @@ export default function BudgetBars({ agents }: BudgetBarsProps) {
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-slate-500 font-medium">Lifetime Limit</span>
-                      <span className="font-semibold text-slate-800">
+                      <span className="font-semibold text-slate-300">
                         {formatCurrency(agent.spentLifetimePaise)} /{" "}
                         {agent.lifetimeLimitPaise
                           ? formatCurrency(agent.lifetimeLimitPaise)
@@ -109,7 +109,7 @@ export default function BudgetBars({ agents }: BudgetBarsProps) {
                           ` (${agent.lifetimeUtilizationPercent}%)`}
                       </span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
                       <div
                         className={`h-full transition-all duration-500 ${lifetimeColor}`}
                         style={{ width: `${agent.lifetimeUtilizationPercent ?? 0}%` }}

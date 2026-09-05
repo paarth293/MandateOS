@@ -44,9 +44,9 @@ MandateOS is the deterministic security, governance, and autonomous recovery con
 │   Gate 1: Ed25519 Detached Signature Verify           → 401 on signature forgery  │
 │   Gate 2: Nonce Replay Prevention (DB Unique Index)   → 409 on replayed packet   │
 │   Gate 3: Timestamp Drift Window (±300s window)       → 401 on stale playback    │
-│   Gate 4: Per-Transaction Limit Cap (paise)          → 400 on limit breach      │
-│   Gate 5: Daily UTC Rolling Spend Ceiling             → 400 on daily cap breach  │
-│   Gate 6: Lifetime Budget Ceiling                     → 400 on lifetime breach   │
+│   Gate 4: Per-Transaction Limit Cap (paise)          → 403 on limit breach      │
+│   Gate 5: Daily UTC Rolling Spend Ceiling             → 403 on daily cap breach  │
+│   Gate 6: Lifetime Budget Ceiling                     → 403 on lifetime breach   │
 │   Gate 7: Merchant Category Whitelist                 → 403 on unapproved sector │
 │   Gate 8: Circuit Breaker & Razorpay Gateway Call     → 503 on upstream outage   │
 └──────────────┬───────────────────────────────────────────────┬───────────────┘
@@ -99,7 +99,7 @@ MandateOS is the deterministic security, governance, and autonomous recovery con
 Any autonomous agent can be secured with MandateOS in minutes:
 
 ```typescript
-import { MandateOSClient } from "@mandateos/sdk";
+import { MandateOSClient } from "mandateos";
 
 // 1. Initialize client with mandate credentials
 const client = new MandateOSClient({

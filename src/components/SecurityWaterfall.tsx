@@ -174,17 +174,17 @@ export function SecurityWaterfall({
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 backdrop-blur-sm shadow-sm overflow-hidden">
+    <div className="mos-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-6 py-4 text-white">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-6 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/25">
             <Cpu className="h-4 w-4" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               MandateOS Deterministic 8-Layer Security Waterfall
-              <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300 border border-emerald-500/30">
+              <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300 border border-emerald-500/25">
                 Zero LLM Drift
               </span>
             </h3>
@@ -195,13 +195,13 @@ export function SecurityWaterfall({
         </div>
 
         <div className="text-right">
-          <span className="text-[11px] font-mono text-slate-400">P99 SLA: &lt;5.0ms</span>
+          <span className="text-[11px] font-mono text-slate-500">P99 SLA: &lt;5.0ms</span>
           <div className="text-xs font-semibold text-emerald-400">Avg 3.18ms</div>
         </div>
       </div>
 
       {/* Waterfall Visualizer */}
-      <div className="divide-y divide-slate-100 p-2 sm:p-4">
+      <div className="divide-y divide-white/[0.06] p-2 sm:p-4">
         {WATERFALL_LAYERS.map((layer) => {
           const status = getLayerStatus(layer.id);
           const Icon = getLayerIcon(layer.id);
@@ -211,12 +211,12 @@ export function SecurityWaterfall({
               key={layer.id}
               className={`flex items-start justify-between rounded-lg p-3 transition-all ${
                 status === "passed"
-                  ? "bg-emerald-50/50 border border-emerald-200/60"
+                  ? "bg-emerald-500/[0.05] border border-emerald-500/20"
                   : status === "failed"
-                    ? "bg-rose-50 border border-rose-300 ring-1 ring-rose-300 shadow-sm"
+                    ? "bg-rose-500/10 border border-rose-500/40 ring-1 ring-rose-500/30"
                     : status === "skipped"
-                      ? "opacity-40 bg-slate-50/30"
-                      : "hover:bg-slate-50"
+                      ? "opacity-40 bg-white/[0.01]"
+                      : "hover:bg-white/[0.03]"
               }`}
             >
               <div className="flex items-start gap-3">
@@ -224,12 +224,12 @@ export function SecurityWaterfall({
                 <div
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${
                     status === "passed"
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-emerald-500 text-[#05070d]"
                       : status === "failed"
-                        ? "bg-rose-600 text-white"
+                        ? "bg-rose-500 text-white"
                         : status === "skipped"
-                          ? "bg-slate-200 text-slate-500"
-                          : "bg-slate-100 text-slate-700 border border-slate-300"
+                          ? "bg-white/10 text-slate-500"
+                          : "bg-white/[0.05] text-slate-300 border border-white/10"
                   }`}
                 >
                   G{layer.id}
@@ -240,30 +240,30 @@ export function SecurityWaterfall({
                     <Icon
                       className={`h-4 w-4 ${
                         status === "passed"
-                          ? "text-emerald-600"
+                          ? "text-emerald-400"
                           : status === "failed"
-                            ? "text-rose-600"
-                            : "text-slate-400"
+                            ? "text-rose-400"
+                            : "text-slate-500"
                       }`}
                     />
                     <span
                       className={`text-sm font-semibold ${
                         status === "failed"
-                          ? "text-rose-900"
+                          ? "text-rose-200"
                           : status === "passed"
-                            ? "text-slate-900"
-                            : "text-slate-700"
+                            ? "text-white"
+                            : "text-slate-300"
                       }`}
                     >
                       {layer.name}
                     </span>
-                    <span className="font-mono text-[10px] text-slate-400 hidden sm:inline">
+                    <span className="font-mono text-[10px] text-slate-500 hidden sm:inline">
                       [{layer.code}]
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-500 mt-0.5">{layer.description}</p>
-                  <code className="text-[10px] font-mono text-slate-600 bg-slate-100/80 px-1.5 py-0.5 rounded mt-1 inline-block">
+                  <p className="text-xs text-slate-400 mt-0.5">{layer.description}</p>
+                  <code className="text-[10px] font-mono text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded mt-1 inline-block">
                     {layer.cryptoDetail}
                   </code>
                 </div>
@@ -272,24 +272,24 @@ export function SecurityWaterfall({
               {/* Status Outcome */}
               <div className="text-right shrink-0 ml-3">
                 {status === "passed" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300 border border-emerald-500/20">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                     Passed ({layer.avgLatencyMs}ms)
                   </span>
                 )}
                 {status === "failed" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-900 border border-rose-300">
-                    <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-1 text-xs font-bold text-rose-200 border border-rose-500/40">
+                    <XCircle className="h-3.5 w-3.5 text-rose-400" />
                     BLOCKED
                   </span>
                 )}
                 {status === "skipped" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-400">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] px-2 py-0.5 text-[11px] text-slate-500">
                     Skipped
                   </span>
                 )}
                 {status === "idle" && (
-                  <span className="text-[11px] font-mono text-slate-400">
+                  <span className="text-[11px] font-mono text-slate-500">
                     ~{layer.avgLatencyMs}ms
                   </span>
                 )}
@@ -304,14 +304,14 @@ export function SecurityWaterfall({
         <div
           className={`border-t px-6 py-3 text-xs flex items-center justify-between ${
             verdict === "ALLOWED"
-              ? "bg-emerald-50/80 border-emerald-200 text-emerald-900"
-              : "bg-rose-50 border-rose-200 text-rose-900"
+              ? "bg-emerald-500/[0.06] border-emerald-500/20 text-emerald-200"
+              : "bg-rose-500/[0.06] border-rose-500/20 text-rose-200"
           }`}
         >
           <div className="flex items-center gap-2">
             {verdict === "ALLOWED" ? (
               <>
-                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
                 <span>
                   <strong>All 8 cryptographic gates passed.</strong> Dispatched to Razorpay Payment
                   Rails.
@@ -319,7 +319,7 @@ export function SecurityWaterfall({
               </>
             ) : (
               <>
-                <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
+                <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
                 <span>
                   <strong>Blocked at Gate {failedLayerId}:</strong> {reason || "Policy Violation"}
                 </span>

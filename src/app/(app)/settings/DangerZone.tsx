@@ -36,10 +36,10 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
   };
 
   return (
-    <div className="rounded-xl border border-rose-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-rose-200 bg-rose-50/50 px-6 py-4">
-        <h2 className="text-base font-semibold text-rose-800 flex items-center gap-2">
-          <AlertOctagon className="h-5 w-5 text-rose-600" />
+    <div className="rounded-xl border border-rose-500/20 bg-slate-900/60 shadow-sm overflow-hidden">
+      <div className="border-b border-rose-500/20 bg-rose-500/10 px-6 py-4">
+        <h2 className="text-base font-semibold text-rose-400 flex items-center gap-2">
+          <AlertOctagon className="h-5 w-5 text-rose-400" />
           Danger Zone
         </h2>
       </div>
@@ -49,8 +49,8 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
           <div
             className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${
               feedback.kind === "ok"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-rose-50 border-rose-200 text-rose-700"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                : "bg-rose-500/10 border-rose-500/20 text-rose-400"
             }`}
           >
             {feedback.kind === "ok" ? (
@@ -63,7 +63,7 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
         )}
 
         <div>
-          <h3 className="text-sm font-medium text-slate-900">Revoke All Mandates</h3>
+          <h3 className="text-sm font-medium text-white">Revoke All Mandates</h3>
           <p className="text-xs text-slate-500 mt-1 mb-3">
             Immediately revokes every active agent policy on your account. Each revocation is sealed
             into the audit hash chain.
@@ -78,7 +78,7 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
               )
             }
             disabled={!canManage || busy !== null}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {busy === "revoke" ? (
               <>
@@ -96,8 +96,8 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
           )}
         </div>
 
-        <div className="pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-medium text-slate-900">Force Audit Anchor</h3>
+        <div className="pt-4 border-t border-white/10">
+          <h3 className="text-sm font-medium text-white">Force Audit Anchor</h3>
           <p className="text-xs text-slate-500 mt-1 mb-3">
             Manually publish a cryptographic anchor for every mandate whose audit chain has
             advanced.
@@ -112,7 +112,7 @@ export default function DangerZone({ canManage }: DangerZoneProps) {
               )
             }
             disabled={!canManage || busy !== null}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/60/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-900/60/[0.06] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {busy === "anchor" ? (
               <>

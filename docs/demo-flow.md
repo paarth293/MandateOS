@@ -1,213 +1,144 @@
-# MandateOS — Hackathon Demo Flow
+# MandateOS — Hackathon Demo Flow (5-Minute Version)
 
 **Target runtime:** `npm run dev` (Next.js) + `npx inngest-cli@latest dev` (Inngest local) + `npm run seed` (DB + agent.key).
 **Demo credential:** `priya@mandateos.dev` / `MandateOS@2026`.
 
+> An interactive, timer-driven version of this script — with auto-scrolling active-section highlighting, a pre-flight checklist, and a copy-paste judge handout — is also maintained as a live companion page for the presenter. This file is the source of truth for content; treat the two as kept in sync.
+
 ---
 
-## Pre-demo checklist (30 seconds)
+## Pre-demo checklist
 
 1. **Database seeded?**
    ```bash
    npm run seed
    ```
-   Look for: `🎉 MANDATEOS V3 SEED COMPLETED SUCCESSFULLY!` and the agent secret key printed at the bottom. This writes `agent.key` (the Ed25519 private key) and populates users, merchants, mandates, transactions, audit logs, and anchors.
+   Look for: `🎉 MANDATEOS V3 SEED COMPLETED SUCCESSFULLY!` and the agent secret key printed at the bottom. This writes `agent.key` (the Ed25519 private key) and populates users, merchants, mandates, transactions, audit logs, and anchors — including a pre-existing agent named **"AutoGPT Procurement Agent"**. Do not reuse that exact name when issuing a live mandate below; use **"VendorOps Purchasing Agent"** instead, or the two will look like a duplicate on screen.
 
-2. **Env file present?** Copy `.env.example` → `.env` if not already done. Ensure `DATABASE_URL` points at the seeded Neon DB, `GATEWAY_MODE=mock`, and `AGENT_KEY_PATH=./agent.key`.
-
-3. **Services running?**
+2. **Services running?**
    - Terminal 1: `npm run dev` on `http://localhost:3000`
-   - Terminal 2: `npx inngest-cli@latest dev` (local Inngest dev server)
-   - Terminal 3 (optional): `npm run agent:simulate` — only if you want the pre-scripted attack demo as a backup.
+   - Terminal 2: `npx inngest-cli@latest dev` (required for the recovery segment)
+   - Sanity check: `curl -s http://localhost:3000/api/health | grep -o '"status":"[A-Z]*"'` should print `"status":"HEALTHY"`
 
-4. **Build green?**
+3. **Build green?**
    ```bash
-   npm run typecheck && npm test && npm run build
+   npm run typecheck && npm test
    ```
-   All 53 tests pass, typecheck clean, production build completes.
+   All 53 tests pass, typecheck clean (a full production `npm run build` is worth one dry run before recording, but isn't required for `npm run dev`).
 
 ---
 
-## Opening (0:00–0:30) — The Hook
+## 0:00–0:30 — The Hook
 
-**On screen:** Dashboard (`http://localhost:3000`) with the live "LIVE STREAM" badge, KPI row, volume chart, and audit trail showing "Chain Verified ✓".
+**On screen:** Dashboard (`/`) with the "LIVE STREAM" badge, KPI row, and audit trail already populated from seed data.
 
-**Talking points:**
-> "Right now, autonomous AI agents are writing code, negotiating contracts, and orchestrating cloud infrastructure. But the moment you give an agent financial autonomy — access to corporate credit cards, bank APIs, or UPI rails — you face the trillion-dollar Agent Safety Dilemma: *how do you mathematically guarantee an autonomous agent won't hallucinate and drain your treasury?*
+> "Every major agent framework — LangChain, AutoGPT, CrewAI — can already write code and call APIs on its own. The capability everyone's racing toward next is payments — Google, Visa, and Mastercard all shipped their own agent-payment protocols this year. But every one of those solves 'is this agent allowed to transact at all.' None of them answer: once it can, what exactly can it do, and how do you prove it never did more?
 >
-> Most teams either handicap their agents with manual human approvals, or gamble on fuzzy LLM system prompts that can be jailbroken with a single trick.
+> MandateOS is that layer — a cryptographic financial operating system that sits between an AI agent and Razorpay, and makes overspending, replay attacks, and prompt injection mathematically impossible. Not policy-discouraged. Impossible.
 >
-> The solution is **MandateOS** — the world's first cryptographically verified, deterministic policy firewall and autonomous financial operating system for AI agents."
-
-**Show:**
-- The **Health Strip** at the top (green dot, "All Systems Operational").
-- The **LIVE STREAM** badge pulsing green (SSE connected).
+> This board's been running the whole time we've been building — real agent transactions, real blocked attempts, all cryptographically accounted for in real time."
 
 ---
 
-## The Cryptographic Trust Core (0:30–1:00)
+## 0:30–1:10 — Issuing a Mandate
 
-**On screen:** `/mandates` page.
+**On screen:** `/mandates`
 
-**Action:** Click "+ Issue New Mandate" → fill the modal:
-- Agent name: `AutoGPT Procurement Agent`
-- Per-Txn Cap: `5000`
-- Daily Cap: `25000`
-- Lifetime Cap: `100000`
-- Allowed Categories: `Cloud Servers, AI Inference, APIs`
-- Max Silent Retries: `3`
-- Retry Delay: `30s`
+**Action:** Click **"+ Issue New Mandate"** and fill in:
 
-Click **Issue Mandate**.
+| Field | Value |
+|---|---|
+| Agent Name | `VendorOps Purchasing Agent` |
+| Per-Transaction Cap | ₹5,000 |
+| Daily Cap | ₹25,000 |
+| Lifetime Budget | ₹1,00,000 |
+| Allowed Categories | `Cloud Servers, AI Inference, Developer Tools` |
+| Max Silent Retries | 3 |
 
-**Show:**
-- The modal flips to "Mandate Issued Successfully" with the **Ed25519 Secret Key** displayed. This is the agent's signing key — the agent must hold it to spend *anything*.
-- Point to the **Public Key** shown on the mandate card. "Every purchase request the agent sends must be signed with this key pair. No key, no spend."
+> "An agent can't move a single rupee without a Mandate — a cryptographically signed policy contract a human administrator issues to it, once, up front."
 
-**Talking points:**
-> "When a human administrator provisions an agent, MandateOS issues an Ed25519 cryptographic keypair. Every purchase request must be canonically serialized, signed with the private key, timestamped within 300 seconds, and stamped with a unique cryptographic nonce.
->
-> Our backend enforces zero-trust policy evaluation: signature verification, replay attack shield via database-level nonce uniqueness, and mathematical caps that prompt injections cannot change because it's integer math — not an LLM."
+After clicking **Issue Mandate**, the success screen reveals the Ed25519 keypair:
+
+> "That's an Ed25519 asymmetric keypair, generated on the spot. The agent gets the private key — every purchase request it ever makes must carry a valid signature from that exact key, or the firewall drops it before it touches the gateway. No key, no spend. Period."
 
 ---
 
-## Live Agent Commerce & Attack Demo (1:00–1:45)
+## 1:10–3:00 — The Attack Gauntlet
 
-**Primary demo path:** Use the **Attack Console** (new page, `/attack`) — this is the interactive moment where judges can *try to break it themselves*.
+**On screen:** `/attack`
 
-**On screen:** `/attack` page (or the Attack Console embedded on the dashboard).
+> "Let's try to break it. The console ships six real attack scenarios fired straight at the live policy engine — the same tools a real adversary would reach for. We'll run five live."
 
-**Step 1: Legitimate purchase via the SDK (if time permits)**
-If the agent script is running in Terminal 3:
-```
-Scenario 1 — SDK INTEGRATION DEMO
-   -> SDK verdict: ✅ AUTHORIZED (HTTP 200)
-```
-This shows the 3-line SDK integration working.
+Budget ~18s per attack: launch, let the verdict land, one sentence, move on.
 
-**Step 2: Forged Signature attack**
-- In the Attack Console, select **"Forged Signature ⚠"**.
-- Click **Launch Attack**.
-- **Expected verdict:** `BLOCKED` — `INVALID_SIGNATURE: Asymmetric cryptographic signature mismatch` (HTTP 401).
-- **Show the signature field:** `ffffffffffffffffffffffff…` — garbage hex. "The agent didn't have the real key, so it submitted garbage. The firewall verified the detached Ed25519 signature against the mandate's public key and rejected it immediately."
+| # | Scenario | Verdict | Say |
+|---|---|---|---|
+| 1 | Forged Signature ⚠ | `BLOCKED · INVALID_SIGNATURE` (HTTP 401) | "Garbage hex instead of a real signature. Ed25519 verification failed instantly — gate one." |
+| 2 | Spending Cap Breach 💸 | `BLOCKED · LIMIT_EXCEEDED` (HTTP 403) | "₹5,000 cap, ₹9,99,999.99 requested. Deterministic integer math — no model to prompt-inject." |
+| 3 | Unauthorized Category 🚫 | `BLOCKED · CATEGORY_BLOCKED` (HTTP 403) | "Luxury Sports Cars isn't whitelisted. Blocked before any gateway call." |
+| 4 | Stale Timestamp ⏰ | `BLOCKED · STALE_REQUEST` (HTTP 401) | "±300 second freshness window. A ten-minute-old packet is dead on arrival." |
+| 5 | Replay Attack 🔁 (**wow moment**) | `ALLOWED` then `REPLAY_DETECTED` (HTTP 409) | "First shot's legitimate. Second is a byte-for-byte replay — same nonce, same signature — and the unique-nonce constraint catches it instantly. A perfectly valid signature still can't be reused." |
 
-**Step 3: Spending Cap Breach**
-- Select **"Spending Cap Breach 💸"**.
-- Click **Launch Attack** (uses the pre-filled ₹999,999.99 or adjust).
-- **Expected verdict:** `BLOCKED` — `LIMIT_EXCEEDED: …` (HTTP 403).
-- **Show the policy detail dropdown:** per-tx cap ₹5,000 vs requested ₹999,999.99. "Deterministic integer math enforces the limit. No prompt injection can change it."
-
-**Step 4: Unauthorized Category**
-- Select **"Unauthorized Category 🚫"**.
-- Click **Launch Attack** (pre-filled "Luxury Sports Cars").
-- **Expected verdict:** `BLOCKED` — `CATEGORY_BLOCKED: Merchant category 'Luxury Sports Cars' is not authorized.` (HTTP 403).
-
-**Step 5: Stale Timestamp**
-- Select **"Stale Timestamp ⏰"**.
-- Click **Launch Attack**.
-- **Expected verdict:** `BLOCKED` — `STALE_REQUEST: Request timestamp is outside the allowed 300-second verification window` (HTTP 401).
-- **Show the policy detail:** timestamp drift 400s (limit 300s).
-
-**Step 6: Replay Attack (the wow moment)**
-- Select **"Replay Attack 🔁"**.
-- Click **Launch Attack** — the console fires a nominal packet, then immediately re-submits it with the same nonce.
-- **Expected verdict on the second attempt:** `REPLAY_DETECTED` (HTTP 409).
-- **Show the nonce:** the same value was used twice. "The database unique-nonce constraint detects the replay. Even if an attacker intercepts a valid packet and replays it verbatim, MandateOS returns 409 REPLAY_DETECTED."
-
-**Talking points (between attacks):**
-> "Six attack scenarios, six different firewall layers, six blocked verdicts. No LLM in the loop — just deterministic Ed25519 verification, database-enforced replay protection, integer spending caps, category whitelisting, and timestamp drift checks."
+> "Five attack vectors, five different cryptographic gates, five blocked verdicts — zero LLMs anywhere in that decision path. Pure deterministic policy math, averaging 3.2 milliseconds. There's a sixth scenario in here too, a malicious-owner replay, for anyone who wants to dig in after the demo."
 
 ---
 
-## Resiliency, Circuit Breakers & Inngest State Machine (1:45–2:20)
+## 3:00–3:45 — Autonomous Recovery
 
-**On screen:** Dashboard, then **Chaos Console**.
+**On screen:** `/` — scroll to the Chaos Console. *(Requires the Inngest dev worker running.)*
 
-**Action:**
-1. On the dashboard, point to the **Live Transaction Feed** — it's currently empty or showing seed data.
-2. Open the **Chaos Console** (on the dashboard, below the Attack Console, or at `/`).
-3. Click **"Inject Catastrophic Failure"** (pre-set to BANK_TIMEOUT).
-4. **Expected:** A toast appears: "Failure injected on transaction … Inngest will silently retry it after a 30s backoff. Watch the live feed."
-5. **Watch the Live Feed** — after ~30 seconds, the transaction transitions from FAILED → RECOVERED.
-6. Point to the audit trail — a new block appears: `PAYMENT_FAILED` → `SILENT_RETRY` → `SILENT_RETRY_SUCCESS`, each cryptographically chained.
+> "What happens when Razorpay itself fails — a bank timeout, a dropped webhook? In most agent stacks, that either double-debits the customer or silently loses the transaction."
 
-**Talking points:**
-> "Now, what happens when the real world fails? Payment gateways suffer bank timeouts, webhook drops, and 504 gateway errors.
->
-> In traditional systems, agents panic and spam retries, triggering fraud blocks. In MandateOS, **Inngest** powers a resilient payment state machine: exponential backoff with jitter, gateway circuit breaker that trips after 5 consecutive failures, and a quarantine review queue where compliance teams can inspect and approve retries with one click."
+**Action:** Click **Inject Catastrophic Failure** (pre-set to Bank Timeout) → Live Transaction Feed shows `FAILED` → flips to `RECOVERED` after ~30s.
 
-**Fallback if the 30s wait is too long for the demo:**
-- Trigger the chaos injection earlier in the flow.
-- While waiting, continue with the audit chain demo (next section).
-- Come back to the RECOVERED transaction at the end.
+> "Watch the chain: PAYMENT_FAILED → SILENT_RETRY → SILENT_RETRY_SUCCESS. Every event gets sealed into the hash chain, retried with exponential backoff and jitter, and checked against Razorpay's own Orders API before we ever retry — so there's no double debit. The agent never even knew there was an outage."
+
+**Fallback if 30s feels too long on camera:** inject the chaos failure back during the mandate-issuance section instead; it'll already read `RECOVERED` by the time you get here.
 
 ---
 
-## Verifiable Audit Chains & External Anchors (2:20–2:50)
+## 3:45–4:40 — Audit Chain & AI Diagnostics
 
-**On screen:** `/trust` — the Cryptographic Trust & Anchor Explorer.
+**On screen:** `/trust`, then back to `/` for the Audit Trail card.
 
-**Action:**
-1. Click **"Publish State Anchor Now"**.
-2. Show the anchor appearing in the chain: HEAD ANCHOR with its SHA-256 anchor hash.
-3. Copy the anchor hash.
-4. Go to the **Public Chain Verifier** input at the top of the Trust page.
-5. Paste the anchor hash, click **Verify Integrity**.
-6. **Expected:** "Cryptographic anchor verified. SHA-256 block chain integrity is intact." with the anchor details below.
+> "Every event — approvals, blocks, retries, settlements — gets sealed into a SHA-256 hash chain, each block carrying the hash of the one before it. Tamper with a single byte anywhere in that history and the chain shatters."
 
-**Show:**
-- The **Public Chain Verifier** — zero credentials required. "External auditors don't need access to our internal systems. They can independently verify the chain integrity using only the anchor hash."
-- Click **Export Signed Chain** (top right of Trust page) → downloads a JSON file with the full audit chain, manifest hash, and signature status.
+**Action:** Click **Publish State Anchor Now** → copy the anchor hash into the **Public Chain Verifier** → **Verify Integrity** → expect "Cryptographic anchor verified — chain intact" → **Export Signed Chain**.
 
-**Talking points:**
-> "Every policy check, retry, and settlement is analyzed by Google Gemini for plain-English incident explanations and sealed into a SHA-256 Cryptographic Hash Chain.
->
-> Notice the 'Chain Verified ✓' badge. Our verification engine recomputes every block from genesis. If a malicious actor tampers with a single byte in the database, the hash chain shatters instantly.
->
-> Furthermore, MandateOS periodically publishes external **Audit Anchors** — immutable cryptographic checkpoints that external regulators and auditors can independently verify without access to internal systems."
+> "An external auditor can verify this entire chain with zero access to our systems — just the anchor hash. Every export carries the mandate's own Ed25519 signature, so a compliance team knows it wasn't tampered with in transit either."
 
-**Fallback if Gemini is unavailable:**
-- The AI analysis has a deterministic fallback (already in the code). The audit log will still show a structured entry, just with a synthetic summary instead of a Gemini-generated one. This is fine for the demo — the hash chain integrity is independent of the AI layer.
+Then, on the dashboard's Audit Trail card, open any BLOCKED or FAILED entry:
+
+> "On top of the deterministic firewall, every failure or block also gets read by Gemini 2.0 Flash, which turns it into a plain-English incident note. To be clear — that AI layer is advisory. It explains; it doesn't decide. The policy waterfall already made the deterministic call in three milliseconds."
+
+**Fallback if Gemini is unavailable:** the deterministic fallback note still populates the audit entry — say "and Gemini would normally narrate this in plain English here."
 
 ---
 
-## The Close (2:50–3:00)
+## 4:40–5:00 — The Close
 
-**On screen:** Return to the dashboard, or show the SDK code snippet.
-
-**Action:** If the mandate issuance modal is still open, point to the SDK snippet at the bottom:
 ```typescript
 import { MandateOSClient } from "mandateos";
+
 const client = new MandateOSClient({ mandateId, secretKey });
-await client.purchase({ amountPaise, category });
+await client.purchase({ amountPaise: 450000, category: "Cloud Infrastructure" });
 ```
 
-**Talking points:**
-> "MandateOS turns reckless agent commerce into provably secure, enterprise-ready transactions. With our plug-and-play TypeScript SDK, any AI agent framework — from LangChain to AutoGPT — can be secured in three lines of code.
+> "Any agent framework — LangChain, AutoGPT, CrewAI — drops into MandateOS in three lines of TypeScript: Ed25519 signing, an eight-layer deterministic policy waterfall, durable Inngest-powered recovery, a tamper-evident audit chain, and Gemini diagnostics, all wired natively into Razorpay.
 >
-> Autonomous agents are the future of work. MandateOS is how the world will trust them with money.
->
-> Thank you."
+> Autonomous agents are the future of enterprise software. MandateOS is how the world hands them money and still sleeps at night. Thank you."
+
+**60-second reset, if you're badly over time:** "MandateOS gives AI agents cryptographically signed spending mandates — Ed25519 signatures, replay-proof nonces, and hard integer spending caps — so overspending and replay attacks aren't discouraged, they're mathematically impossible. When the payment gateway itself fails, Inngest recovers automatically with zero double-debits, and every action is sealed into a tamper-evident, publicly verifiable audit chain. Three lines of code secures any agent framework."
 
 ---
 
 ## Backup plan: `npm run agent:simulate`
 
-If the live Attack Console doesn't work for some reason (e.g., agent.key missing, DB not seeded), run the scripted simulation as a backup:
+If the live Attack Console doesn't work for any reason (e.g. `agent.key` missing, DB not seeded), run the scripted simulation instead and narrate the terminal output live:
 
 ```bash
 npm run agent:simulate
 ```
-
-This fires 6 pre-scripted scenarios against the seeded mandate and prints the verdicts in the terminal. You can narrate along while the terminal output shows the results. The script now uses the **MandateOSClient SDK** for the legitimate purchase (Scenario 1) and raw crypto for the attack scenarios, exactly matching the pitch.
-
-**Pre-scripted scenarios in the simulate script:**
-1. Legitimate purchase via SDK (should succeed)
-2. Spending limit exceeded (should block — LIMIT_EXCEEDED)
-3. Unauthorized category (should block — CATEGORY_BLOCKED)
-4. Stale timestamp (should block — STALE_REQUEST)
-5. Tampered signature forgery (should block — INVALID_SIGNATURE)
-6. Replay attack (should block — REPLAY_DETECTED)
 
 ---
 
@@ -215,23 +146,31 @@ This fires 6 pre-scripted scenarios against the seeded mandate and prints the ve
 
 | Feature | Requires | Fallback |
 |---------|----------|----------|
-| Attack Console (live attacks) | `agent.key` (from `npm run seed`), seeded DB | Use `npm run agent:simulate` script instead |
-| Inngest recovery (CHAOS → RECOVERED) | Inngest dev server running, seeded DB with a FAILED transaction | Pre-seed a FAILED transaction in the DB; narrate the expected flow if the 30s wait is too long |
-| Gemini AI audit explanations | `GEMINI_API_KEY` set | Deterministic fallback kicks in automatically (code already handles this) |
+| Attack Console (live attacks) | `agent.key` (from `npm run seed`), seeded DB | `npm run agent:simulate` |
+| Inngest recovery (FAILED → RECOVERED) | Inngest dev server running, seeded DB | Pre-seed the failure earlier in the flow and revisit already-`RECOVERED` |
+| Gemini AI audit explanations | `GEMINI_API_KEY` set | Deterministic fallback kicks in automatically |
 | Live SSE stream on dashboard | Dev server running, authenticated session | Dashboard polls every 30s as fallback |
 | Chain verification | Seeded audit logs | Works with seed data; empty chain verifies as intact |
 | Signed export | `agent.key` available | Export is emitted as UNSIGNED if key missing (explicitly labeled) |
-| HMAC session cookies | `SESSION_SECRET` set in production | Dev fallback used in local demos (documented in `.env.example`) |
 
 ---
 
 ## Timing cheat sheet
 
-| Section | Duration | Page/Screen | Key action |
-|---------|----------|-------------|------------|
-| Hook | 0:00–0:30 | Dashboard (`/`) | Show LIVE STREAM badge, Health Strip |
-| Cryptographic Trust Core | 0:30–1:00 | `/mandates` | Issue new mandate, show Ed25519 keypair |
-| Live Agent Commerce & Attacks | 1:00–1:45 | `/attack` or Dashboard Attack Console | Launch 6 attacks, show BLOCKED verdicts |
-| Resiliency & Inngest | 1:45–2:20 | Dashboard Chaos Console | Inject failure, watch RECOVERED after 30s |
-| Verifiable Audit Chains | 2:20–2:50 | `/trust` | Publish anchor, verify in public verifier, export chain |
-| Close | 2:50–3:00 | Dashboard or SDK snippet | Three-line SDK integration pitch |
+| Window | Section | Page | Key beat |
+|---|---|---|---|
+| 0:00–0:30 | Hook | `/` | Live stream badge + populated KPIs |
+| 0:30–1:10 | Issue Mandate | `/mandates` | Create agent, reveal Ed25519 keypair |
+| 1:10–3:00 | Attack Gauntlet | `/attack` | 5 live attacks, all BLOCKED |
+| 3:00–3:45 | Recovery | `/` | Inject timeout → watch RECOVERED |
+| 3:45–4:40 | Audit & AI | `/trust` | Publish + verify anchor, Gemini note |
+| 4:40–5:00 | Close | `/` | 3-line SDK + closing line |
+
+---
+
+## Further reading
+
+- [`docs/JUDGES-FAQ.md`](./JUDGES-FAQ.md) — straight answers to the objections judges are most likely to raise
+- [`docs/CASE-STUDIES.md`](./CASE-STUDIES.md) — worked deployment scenarios and the threat model summary
+- [`docs/ADR/`](./ADR/) — why each core technical decision was made, and what was ruled out
+- [`docs/BUSINESS-CASE.md`](./BUSINESS-CASE.md) — market sizing and monetization model

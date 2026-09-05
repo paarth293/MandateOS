@@ -1,4 +1,5 @@
 // src/server/schema.ts
+import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -229,3 +230,15 @@ export const anchors = pgTable("anchors", {
   blockCount: integer("block_count").notNull(),
   anchoredAt: timestamp("anchored_at").defaultNow().notNull(),
 });
+
+// --- RELATIONS ---
+export const mandatesRelations = relations(mandates, ({ many }) => ({
+  transactions: many(transactions),
+}));
+
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+  mandate: one(mandates, {
+    fields: [transactions.mandateId],
+    references: [mandates.id],
+  }),
+}));
