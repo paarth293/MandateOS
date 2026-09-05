@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Radio, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AttackConsole from "@/components/AttackConsole";
 import AuditTrail from "@/components/AuditTrail";
 import ChaosConsole from "@/components/ChaosConsole";
 import BudgetBars, { type AgentMetric } from "@/components/dashboard/BudgetBars";
@@ -175,7 +176,15 @@ export default function DashboardView({ user }: DashboardViewProps) {
       {analyticsData?.agentMetrics && <BudgetBars agents={analyticsData.agentMetrics} />}
 
       {/* 5. Chaos Injection Console */}
-      {data.mandates.length > 0 && <ChaosConsole activeMandateId={data.mandates[0].id} />}
+      {data.mandates.length > 0 && (
+        <>
+          <ChaosConsole activeMandateId={data.mandates[0].id} />
+          {/* Compact attack console: let judges fire signature/replay/cap/category attacks from the main view. */}
+          <div className="mt-6">
+            <AttackConsole mandateId={data.mandates[0].id} agentName={data.mandates[0].agentName} />
+          </div>
+        </>
+      )}
 
       {/* 6. Active Policies Summary */}
       <section>

@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "audit_logs_mandate_previous_hash_key" ON "audit_logs" USING btree ("mandate_id","previous_hash");--> statement-breakpoint
+CREATE INDEX "audit_logs_mandate_created_idx" ON "audit_logs" USING btree ("mandate_id","created_at");

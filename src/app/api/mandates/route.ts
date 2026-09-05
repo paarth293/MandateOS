@@ -1,10 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
-import { generateAuditHash, generateKeypair, signData } from "@/lib/crypto";
+import { generateKeypair, signData } from "@/lib/crypto";
 import { appendAuditBlock } from "@/server/audit";
 import { getSessionUser } from "@/server/auth";
 import { db } from "@/server/db";
-import { auditLogs, mandates } from "@/server/schema";
+import { mandates } from "@/server/schema";
 import { createMandateSchema, updateMandateSchema } from "@/server/validation";
 
 export const dynamic = "force-dynamic";
@@ -87,22 +87,14 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    // 3. Write Genesis Block to Cryptographic Audit Chain
-    const genesisHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    // 3. Write Genesis Block to Cryptographic Audit Chain via the shared
+    //    fork-proof chain writer.
     const auditDetails = {
       summary: `Mandate policy issued for agent ${data.agentName} by ${user.name}.`,
       confidenceScore: 1.0,
       publicKey: keypair.publicKey,
     };
-    const currentHash = generateAuditHash("MANDATE_INITIALIZED", auditDetails, genesisHash);
-
-    await db.insert(auditLogs).values({
-      mandateId: newMandate.id,
-      action: "MANDATE_INITIALIZED",
-      details: auditDetails,
-      previousHash: genesisHash,
-      currentHash,
-    });
+    await appendAuditBlock(newMandate.id, "MANDATE_INITIALIZED", auditDetails);
 
     return NextResponse.json(
       {

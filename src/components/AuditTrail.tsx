@@ -32,7 +32,7 @@ interface AuditTrailProps {
 }
 
 interface VerificationState {
-  status: "idle" | "verifying" | "verified" | "compromised";
+  status: "idle" | "verifying" | "verified" | "compromised" | "unavailable";
   blockCount: number;
   brokenBlockIndex: number | null;
   message?: string;
@@ -70,12 +70,14 @@ export default function AuditTrail({ logs, mandateId }: AuditTrailProps) {
         });
       }
     } catch {
-      // Fallback verification
-      setVerification({
-        status: "verified",
-        blockCount: logs.length,
-        brokenBlockIndex: null,
-      });
+      // FAIL CLOSED: if verification cannot run (network/endpoint failure), we
+      // must NEVER display "Chain Verified" — an unverifiable chain is not a
+      // verified chain. Show an explicit unavailable state instead.
+      setVerification((prev) => ({
+        ...prev,
+        status: "unavailable",
+        message: "Verification service unreachable — chain integrity is NOT confirmed.",
+      }));
     }
   }, [mandateId, logs]);
 
@@ -115,6 +117,16 @@ export default function AuditTrail({ logs, mandateId }: AuditTrailProps) {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-950/80 px-3 py-1 text-xs font-semibold text-red-300 border border-red-800">
               <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
               Chain Compromised ⚠
+            </span>
+          )}
+
+          {verification.status === "unavailable" && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-950/80 px-3 py-1 text-xs font-semibold text-amber-300 border border-amber-800"
+              title={verification.message}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+              Verification Unavailable
             </span>
           )}
 

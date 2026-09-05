@@ -1,17 +1,10 @@
 import { and, eq, lt } from "drizzle-orm";
-import { generateAuditHash } from "@/lib/crypto";
 import { analyzeTransactionFailure } from "../ai";
 import { publishAnchorForMandate } from "../anchoring";
+import { appendAuditBlock } from "../audit";
 import { db } from "../db";
 import { executeRetry } from "../recovery";
-import {
-  auditLogs,
-  authAttempts,
-  mandates,
-  purchaseAttempts,
-  sessions,
-  transactions,
-} from "../schema";
+import { authAttempts, mandates, purchaseAttempts, sessions, transactions } from "../schema";
 import { inngest } from "./client";
 
 export const recoverFailedPayment = inngest.createFunction(
@@ -90,28 +83,19 @@ export const generateAuditLog = inngest.createFunction(
 
     // 3. Append to Cryptographic Hash Chain
     await step.run("write-secure-log", async () => {
-      // Fetch the most recent log for the mandate's hash chain
-      const lastLog = await db.query.auditLogs.findFirst({
-        where: eq(auditLogs.mandateId, payload.mandateId),
-        orderBy: (auditLogs, { desc }) => [desc(auditLogs.createdAt)],
-      });
-
-      const previousHash = lastLog
-        ? lastLog.currentHash
-        : "0000000000000000000000000000000000000000000000000000000000000000";
-
       const action = payload.action || (payload.retryCount > 0 ? "SILENT_RETRY" : "PAYMENT_FAILED");
 
-      const currentHash = generateAuditHash(action, aiAnalysis, previousHash);
-
-      await db.insert(auditLogs).values({
-        mandateId: payload.mandateId,
-        transactionId: payload.transactionId,
+      // appendAuditBlock is the single shared chain writer; it is fork-proof
+      // via the unique (mandate_id, previous_hash) index and retries against
+      // the fresh head if a concurrent writer claimed the same predecessor.
+      const currentHash = await appendAuditBlock(
+        payload.mandateId,
         action,
-        details: aiAnalysis,
-        previousHash,
-        currentHash,
-      });
+        aiAnalysis,
+        payload.transactionId,
+      );
+
+      return { currentHash, action };
     });
 
     // 4. Outbound Webhook Alert (if mandate has notifyUrl configured)

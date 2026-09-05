@@ -15,6 +15,13 @@
       "when": 1788555797458,
       "tag": "0001_harden_transactions_auth_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788599279732,
+      "tag": "0002_fork_proof_audit_chain",
+      "breakpoints": true
     }
   ]
 }

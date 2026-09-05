@@ -2,6 +2,7 @@
 
 import {
   Anchor,
+  Crosshair,
   LayoutDashboard,
   Receipt,
   Settings,
@@ -14,6 +15,7 @@ import { usePathname } from "next/navigation";
 
 const navigation = [
   { name: "Chaos Console", href: "/", icon: LayoutDashboard },
+  { name: "Attack Console", href: "/attack", icon: Crosshair },
   { name: "Mandates", href: "/mandates", icon: ShieldCheck },
   { name: "Review Queue", href: "/review", icon: UserCheck },
   { name: "Transactions", href: "/transactions", icon: Receipt },

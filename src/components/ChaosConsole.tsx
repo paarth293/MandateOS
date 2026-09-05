@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertOctagon, Loader2, Zap } from "lucide-react";
+import { AlertOctagon, CheckCircle2, Loader2, Zap } from "lucide-react";
 import { useState } from "react";
 import { createPendingTransaction } from "@/app/(app)/actions";
 
@@ -11,14 +11,16 @@ interface ChaosConsoleProps {
 export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
   const [isInjecting, setIsInjecting] = useState(false);
   const [failureType, setFailureType] = useState("BANK_TIMEOUT");
+  const [injectResult, setInjectResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const handleInjectChaos = async () => {
     setIsInjecting(true);
+    setInjectResult(null);
 
     try {
       const txId = await createPendingTransaction(activeMandateId, 500000);
 
-      await fetch("/api/chaos/trigger", {
+      const res = await fetch("/api/chaos/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -27,8 +29,26 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
           failureReason: failureType,
         }),
       });
+
+      if (res.ok) {
+        const recoveryNote =
+          failureType === "BANK_TIMEOUT"
+            ? "Inngest will silently retry it after a 30s backoff."
+            : "It has been quarantined for human review.";
+        setInjectResult({
+          ok: true,
+          message: `Failure injected on transaction ${txId.slice(0, 8)}… ${recoveryNote} Watch the live feed.`,
+        });
+        setTimeout(() => setInjectResult(null), 8000);
+      } else {
+        setInjectResult({
+          ok: false,
+          message: "Injection failed — check your session and try again.",
+        });
+      }
     } catch (error) {
       console.error("Failed to inject chaos", error);
+      setInjectResult({ ok: false, message: "Injection failed — network error." });
     } finally {
       setIsInjecting(false);
     }
@@ -45,6 +65,23 @@ export default function ChaosConsole({ activeMandateId }: ChaosConsoleProps) {
         Warning: This is for demonstration purposes. Clicking this button simulates an AI Agent
         attempting a purchase, followed immediately by a catastrophic gateway failure.
       </p>
+
+      {injectResult && (
+        <div
+          className={`mb-4 flex items-center gap-2 rounded-lg border p-3 text-xs font-medium ${
+            injectResult.ok
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          }`}
+        >
+          {injectResult.ok ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          ) : (
+            <AlertOctagon className="h-4 w-4 shrink-0 text-rose-600" />
+          )}
+          <span>{injectResult.message}</span>
+        </div>
+      )}
 
       <div className="flex items-center space-x-4">
         <select

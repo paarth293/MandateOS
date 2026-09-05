@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, Loader2, Lock, Mail, Shield } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, Lock, Mail, Shield, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -11,8 +11,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const authenticate = async (credentials: { email: string; password: string }) => {
     setLoading(true);
     setError(null);
 
@@ -20,7 +19,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(credentials),
       });
 
       const data = await res.json();
@@ -33,9 +32,21 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign in");
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await authenticate({ email, password });
+  };
+
+  // One-click demo sign-in: keeps judges in the flow during live presentations
+  // instead of retyping credentials on stage.
+  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    await authenticate({ email: demoEmail, password: demoPassword });
   };
 
   return (
@@ -126,11 +137,24 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Demo Hint */}
-        <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-          <p className="text-xs text-slate-500">
+        {/* Demo Hint with one-click sign-in */}
+        <div className="mt-6 border-t border-slate-100 pt-4 space-y-2">
+          <p className="text-xs text-slate-500 text-center">
             Demo credentials: <span className="font-mono text-slate-700">priya@mandateos.dev</span>
           </p>
+          <button
+            type="button"
+            onClick={() => handleDemoLogin("priya@mandateos.dev", "MandateOS@2026")}
+            disabled={loading}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+            )}
+            One-Click Demo Login
+          </button>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import {
   pgEnum,
   pgTable,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -183,26 +184,38 @@ export const authAttempts = pgTable(
 );
 
 // --- AUDIT LOGS (The Cryptographic Trust Trail) ---
-export const auditLogs = pgTable("audit_logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
+// The UNIQUE (mandate_id, previous_hash) index makes hash-chain forks
+// IMPOSSIBLE at the database level: two blocks claiming the same predecessor
+// can never coexist, so concurrent audit writers (Inngest workers, revocation
+// actions) cannot race each other into a broken chain. Writers catch the
+// 23505 conflict and re-append against the fresh head (see src/server/audit.ts).
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
 
-  mandateId: uuid("mandate_id")
-    .references(() => mandates.id)
-    .notNull(),
+    mandateId: uuid("mandate_id")
+      .references(() => mandates.id)
+      .notNull(),
 
-  transactionId: uuid("transaction_id").references(() => transactions.id),
+    transactionId: uuid("transaction_id").references(() => transactions.id),
 
-  action: varchar("action", { length: 255 }).notNull(),
+    action: varchar("action", { length: 255 }).notNull(),
 
-  // Gemini plain English explanation
-  details: jsonb("details").notNull(),
+    // Gemini plain English explanation
+    details: jsonb("details").notNull(),
 
-  // --- THE HASH CHAIN ---
-  previousHash: varchar("previous_hash", { length: 64 }).notNull(),
-  currentHash: varchar("current_hash", { length: 64 }).notNull(),
+    // --- THE HASH CHAIN ---
+    previousHash: varchar("previous_hash", { length: 64 }).notNull(),
+    currentHash: varchar("current_hash", { length: 64 }).notNull(),
 
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("audit_logs_mandate_previous_hash_key").on(table.mandateId, table.previousHash),
+    index("audit_logs_mandate_created_idx").on(table.mandateId, table.createdAt),
+  ],
+);
 
 // --- ANCHORS (External Verifiable Checkpoints) ---
 export const anchors = pgTable("anchors", {
