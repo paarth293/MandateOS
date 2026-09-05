@@ -18,7 +18,8 @@
 2. **Services running?**
    - Terminal 1: `npm run dev` on `http://localhost:3000`
    - Terminal 2: `npx inngest-cli@latest dev` (required for the recovery segment)
-   - Sanity check: `curl -s http://localhost:3000/api/health | grep -o '"status":"[A-Z]*"'` should print `"status":"HEALTHY"`
+   - Sanity check (Windows PowerShell): `(Invoke-RestMethod http://localhost:3000/api/health).status` should print `HEALTHY`
+     — on macOS/Linux/WSL instead: `curl -s http://localhost:3000/api/health | grep -o '"status":"[A-Z]*"'`
 
 3. **Build green?**
    ```bash
