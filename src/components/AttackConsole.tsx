@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { SecurityWaterfall } from "@/components/SecurityWaterfall";
 
 interface AttackResult {
   mandateId: string;
@@ -460,6 +461,15 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             </p>
           </div>
         )}
+
+        {/* 8-Layer Security Waterfall Inspector */}
+        <div className="mt-6 pt-6 border-t border-slate-200">
+          <SecurityWaterfall
+            verdict={result?.verdict ?? null}
+            attackKind={result?.attackKind ?? (launching ? selectedAttack : null)}
+            reason={result?.reason ?? null}
+          />
+        </div>
       </div>
     </div>
   );
