@@ -112,18 +112,59 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
       const category =
         selectedAttack === "CATEGORY_BREACH" ? categoryInput || "Luxury Sports Cars" : undefined;
 
-      const res = await fetch("/api/agent/attack", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mandateId,
-          kind: selectedAttack,
-          amountPaise,
-          category,
-        }),
-      });
+      const fireAttack = async (nonce?: string) => {
+        const res = await fetch("/api/agent/attack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mandateId,
+            kind: selectedAttack,
+            amountPaise,
+            category,
+            nonce,
+          }),
+        });
+        const data = await res.json();
+        return { res, data };
+      };
 
-      const data = await res.json();
+      if (selectedAttack === "REPLAY_NOMINAL") {
+        // Simulate an eavesdropper: fire the SAME signed packet (same nonce)
+        // twice. The first call is the legitimate authorized purchase; the
+        // second is the byte-perfect replay, which the unique-nonce
+        // constraint rejects with REPLAY_DETECTED.
+        const nonce = `replay_nominal_${crypto.randomUUID()}`;
+
+        const first = await fireAttack(nonce);
+        if (first.res.status === 503) {
+          setError(
+            "agent.key is required for this attack. Run `npm run seed` (writes agent.key " +
+              "with the mandate's Ed25519 secret key) and try again.",
+          );
+          return;
+        }
+        if (!first.res.ok) {
+          throw new Error(
+            (first.data.error as string) || `Attack failed (HTTP ${first.res.status})`,
+          );
+        }
+
+        // Brief pause so the "nominal" verdict is visibly distinct from the replay.
+        await new Promise((r) => setTimeout(r, 500));
+
+        const replay = await fireAttack(nonce);
+        if (!replay.res.ok && replay.res.status !== 409) {
+          throw new Error(
+            (replay.data.error as string) || `Attack failed (HTTP ${replay.res.status})`,
+          );
+        }
+
+        setResult(replay.data);
+        setLaunchCount((c) => c + 1);
+        return;
+      }
+
+      const { res, data } = await fireAttack();
 
       if (!res.ok && res.status !== 503) {
         throw new Error((data.error as string) || `Attack failed (HTTP ${res.status})`);
@@ -190,8 +231,6 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
     }
   };
 
-  const isReplayScenario =
-    selectedAttack === "REPLAY_NOMINAL" || selectedAttack === "REPLAY_FRAUD_OWNER";
   const requiresKey =
     selectedScenario?.value === "REPLAY_FRAUD_OWNER" ||
     selectedAttack === "FORGED_SIGNATURE" ||
@@ -303,7 +342,7 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
           <button
             type="button"
             onClick={handleLaunch}
-            disabled={launching || isReplayScenario}
+            disabled={launching}
             className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {launching ? (
@@ -319,10 +358,16 @@ export default function AttackConsole({ mandateId, agentName }: AttackConsolePro
             )}
           </button>
 
-          {isReplayScenario && (
+          {selectedAttack === "REPLAY_NOMINAL" && (
             <p className="text-xs text-rose-600 italic">
-              Replay scenarios run twice automatically — launch once to fire both the nominal packet
-              and its replay.
+              Fires the same signed packet twice automatically — the first call is the legitimate
+              purchase, the second is the replay.
+            </p>
+          )}
+          {selectedAttack === "REPLAY_FRAUD_OWNER" && (
+            <p className="text-xs text-rose-600 italic">
+              Reuses the nonce from this mandate's most recent ALLOWED purchase — run a legitimate
+              purchase first (e.g. the SDK simulation) if none exists yet.
             </p>
           )}
         </div>

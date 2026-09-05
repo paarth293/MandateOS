@@ -24,6 +24,11 @@ interface AttackRequest {
   kind: AttackKind;
   amountPaise?: number;
   category?: string;
+  /** Client-supplied nonce for REPLAY_NOMINAL: the console fires this route
+   *  twice with the SAME nonce (first call = the nominal authorized packet,
+   *  second call = the replay) to simulate an eavesdropper. Ignored for every
+   *  other attack kind. */
+  nonce?: string;
 }
 
 /** Reads the agent's Ed25519 secret key that `npm run seed` wrote. Sole source
@@ -66,6 +71,44 @@ export async function POST(req: Request) {
     const totals = await getCommittedSpendTotals(mandate.id);
     const policyCheck = evaluateMandatePolicy(amountPaise, category, mandate, 0, totals);
 
+    // ---- STALE_TIMESTAMP: backdate the timestamp ----
+    const effectiveTimestamp = body.kind === "STALE_TIMESTAMP" ? timestamp - 400 * 1000 : timestamp;
+    const isStale =
+      body.kind === "STALE_TIMESTAMP" && Math.abs(Date.now() - effectiveTimestamp) > 300_000;
+
+    // ---- Resolve the nonce this packet carries. Computed ONCE, up front, so
+    //      the signed payload and the persisted/replay-checked nonce always
+    //      match (previously these were generated independently and could
+    //      disagree). ----
+    let nonceUsed: string;
+    if (body.kind === "REPLAY_FRAUD_OWNER") {
+      // A malicious owner replays an already-approved packet: steal the nonce
+      // from the newest ALLOWED attempt for this mandate.
+      const lastAttempt = await db.query.purchaseAttempts.findFirst({
+        where: and(
+          eq(purchaseAttempts.mandateId, mandate.id),
+          eq(purchaseAttempts.outcome, "ALLOWED"),
+        ),
+        orderBy: (a, { desc }) => [desc(a.createdAt)],
+      });
+      nonceUsed = lastAttempt?.nonce ?? `replay_steal_${randomUUID()}`;
+    } else if (body.kind === "REPLAY_NOMINAL" && body.nonce) {
+      // The Attack Console fires this route TWICE with the same client-generated
+      // nonce to simulate an eavesdropper replaying a captured packet: the first
+      // call is the legitimate authorized purchase, the second is the replay.
+      nonceUsed = body.nonce;
+    } else {
+      nonceUsed = `attack_${randomUUID()}`;
+    }
+
+    const canonicalForSignature = canonicalStringify({
+      amountPaise,
+      category,
+      mandateId: mandate.id,
+      nonce: nonceUsed,
+      timestamp: effectiveTimestamp,
+    });
+
     // ---- Build the signature for each attack scenario ----
     let signature: string;
     let signatureDescription: string;
@@ -78,31 +121,7 @@ export async function POST(req: Request) {
         signatureDescription = "forged (garbage hex)";
         break;
       }
-      case "STALE_TIMESTAMP": {
-        // Legitimately signed packet, but the timestamp is >300s in the past.
-        const agentKey = await readAgentSecretKey();
-        if (agentKey) {
-          signature = signData(
-            canonicalStringify({
-              amountPaise,
-              category,
-              mandateId: mandate.id,
-              nonce: `attack_${randomUUID()}`,
-              timestamp,
-            }),
-            agentKey,
-          );
-          signatureDescription = `validly signed by agent.key (${agentKey.slice(0, 16)}…)`;
-        } else {
-          signature =
-            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-          signatureDescription = "unsigned (agent.key not found)";
-        }
-        break;
-      }
       case "REPLAY_FRAUD_OWNER": {
-        // A malicious owner replays an already-approved packet: valid signature,
-        // valid params, but the nonce has already been used.
         const agentKey = await readAgentSecretKey();
         if (!agentKey) {
           return NextResponse.json(
@@ -110,42 +129,17 @@ export async function POST(req: Request) {
             { status: 503 },
           );
         }
-        // We'll reuse a nonce that already exists in the DB. First find the newest
-        // ALLOWED attempt for this mandate and steal its nonce.
-        const lastAttempt = await db.query.purchaseAttempts.findFirst({
-          where: and(
-            eq(purchaseAttempts.mandateId, mandate.id),
-            eq(purchaseAttempts.outcome, "ALLOWED"),
-          ),
-          orderBy: (a, { desc }) => [desc(a.createdAt)],
-        });
-        const reusedNonce = lastAttempt?.nonce ?? `replay_steal_${randomUUID()}`;
-        signature = signData(
-          canonicalStringify({
-            amountPaise,
-            category,
-            mandateId: mandate.id,
-            nonce: reusedNonce,
-            timestamp,
-          }),
-          agentKey,
-        );
-        signatureDescription = `validly signed by agent.key, reusing nonce ${reusedNonce.slice(0, 24)}…`;
+        signature = signData(canonicalForSignature, agentKey);
+        signatureDescription = `validly signed by agent.key, reusing nonce ${nonceUsed.slice(0, 24)}…`;
         break;
       }
       default: {
-        // CAP_BREACH, CATEGORY_BREACH, REPLAY_NOMINAL: signed by the owner if
-        // the key is available; otherwise unsigned (still blocked by policy).
+        // CAP_BREACH, CATEGORY_BREACH, REPLAY_NOMINAL, STALE_TIMESTAMP: signed
+        // by the owner if the key is available; otherwise unsigned (still
+        // blocked by policy / staleness / signature checks).
         const agentKey = await readAgentSecretKey();
         if (agentKey) {
-          const nonce =
-            body.kind === "REPLAY_NOMINAL"
-              ? `replay_nominal_${randomUUID()}`
-              : `attack_${randomUUID()}`;
-          signature = signData(
-            canonicalStringify({ amountPaise, category, mandateId: mandate.id, nonce, timestamp }),
-            agentKey,
-          );
+          signature = signData(canonicalForSignature, agentKey);
           signatureDescription = `validly signed by agent.key (${agentKey.slice(0, 16)}…)`;
         } else {
           signature =
@@ -154,50 +148,6 @@ export async function POST(req: Request) {
         }
         break;
       }
-    }
-
-    // ---- STALE_TIMESTAMP: backdate the timestamp ----
-    const effectiveTimestamp = body.kind === "STALE_TIMESTAMP" ? timestamp - 400 * 1000 : timestamp;
-    const isStale =
-      body.kind === "STALE_TIMESTAMP" && Math.abs(Date.now() - effectiveTimestamp) > 300_000;
-
-    // ---- For attacks needing a fresh nonce, recompute the canonical payload ----
-    //      with the effective timestamp so the signature matches what the real
-    //      route would recompute. (For REPLAY_FRAUD_OWNER the nonce is reused.)
-    let canonicalForSignature: string;
-    let nonceUsed: string;
-    if (body.kind === "REPLAY_FRAUD_OWNER") {
-      const lastAttempt = await db.query.purchaseAttempts.findFirst({
-        where: and(
-          eq(purchaseAttempts.mandateId, mandate.id),
-          eq(purchaseAttempts.outcome, "ALLOWED"),
-        ),
-        orderBy: (a, { desc }) => [desc(a.createdAt)],
-      });
-      nonceUsed = lastAttempt?.nonce ?? `replay_steal_${randomUUID()}`;
-      canonicalForSignature = canonicalStringify({
-        amountPaise,
-        category,
-        mandateId: mandate.id,
-        nonce: nonceUsed,
-        timestamp: effectiveTimestamp,
-      });
-      // Signature was computed above for this nonce+timestamp already; if it
-      // doesn't match, recompute. (We computed it with the same values, so it
-      // should match — but be defensive.)
-      if (!verifySignature(canonicalForSignature, signature, mandate.publicKey)) {
-        signature = signData(canonicalForSignature, (await readAgentSecretKey()) ?? "");
-        signatureDescription = `recomputed valid signature for reused nonce ${nonceUsed.slice(0, 24)}…`;
-      }
-    } else {
-      nonceUsed = `attack_${randomUUID()}`;
-      canonicalForSignature = canonicalStringify({
-        amountPaise,
-        category,
-        mandateId: mandate.id,
-        nonce: nonceUsed,
-        timestamp: effectiveTimestamp,
-      });
     }
 
     // ---- Replay detection: does this nonce already exist in the DB? ----
