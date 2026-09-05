@@ -32,8 +32,8 @@ interface AttackRequest {
 async function readAgentSecretKey(): Promise<string | null> {
   const keyPath = process.env.AGENT_KEY_PATH || path.resolve(process.cwd(), "agent.key");
   try {
-    if (fs.existsSync(keyPath)) {
-      const key = fs.readFileSync(keyPath, "utf8").trim();
+    if (fs.existsSync(/*turbopackIgnore: true*/ keyPath)) {
+      const key = fs.readFileSync(/*turbopackIgnore: true*/ keyPath, "utf8").trim();
       if (key) return key;
     }
   } catch {
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     const mandate = await db.query.mandates.findFirst({
       where: eq(mandates.id, body.mandateId),
     });
-    if (!mandate || mandate.status !== "ACTIVE") {
+    if (mandate?.status !== "ACTIVE") {
       return NextResponse.json({ error: "Mandate not active" }, { status: 404 });
     }
 

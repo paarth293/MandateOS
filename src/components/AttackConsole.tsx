@@ -6,7 +6,6 @@ import {
   Crosshair,
   Loader2,
   ShieldAlert,
-  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";

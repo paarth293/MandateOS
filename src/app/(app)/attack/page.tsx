@@ -4,7 +4,6 @@ import AttackConsole from "@/components/AttackConsole";
 import { getSessionUser } from "@/server/auth";
 import { getUserMandateIds } from "@/server/authz";
 import { db } from "@/server/db";
-import { mandates } from "@/server/schema";
 
 export const dynamic = "force-dynamic";
 

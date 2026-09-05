@@ -176,6 +176,12 @@ async function seed() {
       },
     });
 
+  // Clean up mutable tables for reproducible, idempotent re-seeding
+  await db.delete(anchors);
+  await db.delete(auditLogs);
+  await db.delete(purchaseAttempts);
+  await db.delete(transactions);
+
   // 5. Historical Transactions Across 7-Day Timeline
   console.log("💳 Seeding varied 7-day transaction stream with chaos scenarios...");
   const transactionTemplates = [
